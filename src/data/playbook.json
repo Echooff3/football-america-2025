@@ -1,0 +1,417 @@
+{
+  "playbookName": "Standard",
+  "formations": {
+    "offense": {
+      "pro_set": {
+        "description": "Traditional 2-back formation with FB and HB",
+        "positions": {
+          "off_1": { "x": 0, "z": -5, "role": "QB" },
+          "off_2": { "x": 0, "z": -8, "role": "HB" },
+          "off_3": { "x": 0, "z": -6, "role": "FB" },
+          "off_4": { "x": 0, "z": 0, "role": "C" },
+          "off_5": { "x": -2, "z": 0, "role": "LG" },
+          "off_6": { "x": 2, "z": 0, "role": "RG" },
+          "off_7": { "x": -4, "z": 0, "role": "LT" },
+          "off_8": { "x": 4, "z": 0, "role": "RT" },
+          "off_9": { "x": 6, "z": 0, "role": "TE" },
+          "off_10": { "x": -15, "z": 0, "role": "WR_L" },
+          "off_11": { "x": 15, "z": 0, "role": "WR_R" }
+        }
+      },
+      "spread": {
+        "description": "4 WR spread formation",
+        "positions": {
+          "off_1": { "x": 0, "z": -5, "role": "QB" },
+          "off_2": { "x": 2, "z": -5, "role": "RB" },
+          "off_3": { "x": 0, "z": 0, "role": "C" },
+          "off_4": { "x": -2, "z": 0, "role": "LG" },
+          "off_5": { "x": 2, "z": 0, "role": "RG" },
+          "off_6": { "x": -4, "z": 0, "role": "LT" },
+          "off_7": { "x": 4, "z": 0, "role": "RT" },
+          "off_8": { "x": -15, "z": 0, "role": "WR_L1" },
+          "off_9": { "x": -10, "z": 0, "role": "WR_L2" },
+          "off_10": { "x": 15, "z": 0, "role": "WR_R1" },
+          "off_11": { "x": 10, "z": 0, "role": "WR_R2" }
+        }
+      },
+      "i_form": {
+        "description": "I-Formation with FB lead blocker",
+        "positions": {
+          "off_1": { "x": 0, "z": -5, "role": "QB" },
+          "off_2": { "x": 0, "z": -9, "role": "HB" },
+          "off_3": { "x": 0, "z": -7, "role": "FB" },
+          "off_4": { "x": 0, "z": 0, "role": "C" },
+          "off_5": { "x": -2, "z": 0, "role": "LG" },
+          "off_6": { "x": 2, "z": 0, "role": "RG" },
+          "off_7": { "x": -4, "z": 0, "role": "LT" },
+          "off_8": { "x": 4, "z": 0, "role": "RT" },
+          "off_9": { "x": 6, "z": 0, "role": "TE" },
+          "off_10": { "x": -15, "z": 0, "role": "WR_L" },
+          "off_11": { "x": 15, "z": 0, "role": "WR_R" }
+        }
+      },
+      "shotgun": {
+        "description": "QB in shotgun with RB beside",
+        "positions": {
+          "off_1": { "x": 0, "z": -7, "role": "QB" },
+          "off_2": { "x": -3, "z": -7, "role": "RB" },
+          "off_3": { "x": 0, "z": 0, "role": "C" },
+          "off_4": { "x": -2, "z": 0, "role": "LG" },
+          "off_5": { "x": 2, "z": 0, "role": "RG" },
+          "off_6": { "x": -4, "z": 0, "role": "LT" },
+          "off_7": { "x": 4, "z": 0, "role": "RT" },
+          "off_8": { "x": 6, "z": 0, "role": "TE" },
+          "off_9": { "x": -15, "z": 0, "role": "WR_L" },
+          "off_10": { "x": 15, "z": 0, "role": "WR_R" },
+          "off_11": { "x": 10, "z": 0, "role": "SLOT_R" }
+        }
+      },
+      "trips": {
+        "description": "3 WR on one side",
+        "positions": {
+          "off_1": { "x": 0, "z": -5, "role": "QB" },
+          "off_2": { "x": -2, "z": -5, "role": "RB" },
+          "off_3": { "x": 0, "z": 0, "role": "C" },
+          "off_4": { "x": -2, "z": 0, "role": "LG" },
+          "off_5": { "x": 2, "z": 0, "role": "RG" },
+          "off_6": { "x": -4, "z": 0, "role": "LT" },
+          "off_7": { "x": 4, "z": 0, "role": "RT" },
+          "off_8": { "x": 6, "z": 0, "role": "TE" },
+          "off_9": { "x": 15, "z": 0, "role": "WR1" },
+          "off_10": { "x": 12, "z": 0, "role": "WR2" },
+          "off_11": { "x": 9, "z": 0, "role": "WR3" }
+        }
+      },
+      "empty": {
+        "description": "Empty backfield, 5 WR",
+        "positions": {
+          "off_1": { "x": 0, "z": -5, "role": "QB" },
+          "off_2": { "x": 0, "z": 0, "role": "C" },
+          "off_3": { "x": -2, "z": 0, "role": "LG" },
+          "off_4": { "x": 2, "z": 0, "role": "RG" },
+          "off_5": { "x": -4, "z": 0, "role": "LT" },
+          "off_6": { "x": 4, "z": 0, "role": "RT" },
+          "off_7": { "x": -15, "z": 0, "role": "WR_L" },
+          "off_8": { "x": -10, "z": 0, "role": "SLOT_L" },
+          "off_9": { "x": 15, "z": 0, "role": "WR_R" },
+          "off_10": { "x": 10, "z": 0, "role": "SLOT_R" },
+          "off_11": { "x": 6, "z": 0, "role": "TE" }
+        }
+      },
+      "strong_i": {
+        "description": "Strong I-Formation",
+        "positions": {
+          "off_1": { "x": 0, "z": -5, "role": "QB" },
+          "off_2": { "x": 0, "z": -9, "role": "HB" },
+          "off_3": { "x": 0, "z": -7, "role": "FB" },
+          "off_4": { "x": 0, "z": 0, "role": "C" },
+          "off_5": { "x": -2, "z": 0, "role": "LG" },
+          "off_6": { "x": 2, "z": 0, "role": "RG" },
+          "off_7": { "x": -4, "z": 0, "role": "LT" },
+          "off_8": { "x": 4, "z": 0, "role": "RT" },
+          "off_9": { "x": 6, "z": 0, "role": "TE1" },
+          "off_10": { "x": 8, "z": 0, "role": "TE2" },
+          "off_11": { "x": -15, "z": 0, "role": "WR" }
+        }
+      }
+    },
+    "defense": {
+      "4-3": {
+        "description": "4 down linemen, 3 linebackers",
+        "positions": {
+          "def_1": { "x": -1, "z": 1, "role": "DT1" },
+          "def_2": { "x": 1, "z": 1, "role": "DT2" },
+          "def_3": { "x": -5, "z": 1, "role": "DE_L" },
+          "def_4": { "x": 5, "z": 1, "role": "DE_R" },
+          "def_5": { "x": 0, "z": 5, "role": "MLB" },
+          "def_6": { "x": -6, "z": 5, "role": "OLB_L" },
+          "def_7": { "x": 6, "z": 5, "role": "OLB_R" },
+          "def_8": { "x": -15, "z": 7, "role": "CB_L" },
+          "def_9": { "x": 15, "z": 7, "role": "CB_R" },
+          "def_10": { "x": -5, "z": 15, "role": "FS" },
+          "def_11": { "x": 5, "z": 12, "role": "SS" }
+        }
+      },
+      "3-4": {
+        "description": "3 down linemen, 4 linebackers",
+        "positions": {
+          "def_1": { "x": 0, "z": 1, "role": "NT" },
+          "def_2": { "x": -4, "z": 1, "role": "DE_L" },
+          "def_3": { "x": 4, "z": 1, "role": "DE_R" },
+          "def_4": { "x": -2, "z": 4, "role": "ILB_L" },
+          "def_5": { "x": 2, "z": 4, "role": "ILB_R" },
+          "def_6": { "x": -7, "z": 4, "role": "OLB_L" },
+          "def_7": { "x": 7, "z": 4, "role": "OLB_R" },
+          "def_8": { "x": -15, "z": 7, "role": "CB_L" },
+          "def_9": { "x": 15, "z": 7, "role": "CB_R" },
+          "def_10": { "x": -5, "z": 15, "role": "FS" },
+          "def_11": { "x": 5, "z": 12, "role": "SS" }
+        }
+      },
+      "nickel": {
+        "description": "5 DBs for passing situations",
+        "positions": {
+          "def_1": { "x": -1, "z": 1, "role": "DT1" },
+          "def_2": { "x": 1, "z": 1, "role": "DT2" },
+          "def_3": { "x": -5, "z": 1, "role": "DE_L" },
+          "def_4": { "x": 5, "z": 1, "role": "DE_R" },
+          "def_5": { "x": 0, "z": 5, "role": "MLB" },
+          "def_6": { "x": -6, "z": 5, "role": "OLB" },
+          "def_7": { "x": -15, "z": 7, "role": "CB_L" },
+          "def_8": { "x": 15, "z": 7, "role": "CB_R" },
+          "def_9": { "x": 8, "z": 5, "role": "NICKEL" },
+          "def_10": { "x": -5, "z": 15, "role": "FS" },
+          "def_11": { "x": 5, "z": 12, "role": "SS" }
+        }
+      },
+      "dime": {
+        "description": "6 DBs, prevent defense",
+        "positions": {
+          "def_1": { "x": -1, "z": 1, "role": "DT1" },
+          "def_2": { "x": 1, "z": 1, "role": "DT2" },
+          "def_3": { "x": -5, "z": 1, "role": "DE_L" },
+          "def_4": { "x": 5, "z": 1, "role": "DE_R" },
+          "def_5": { "x": 0, "z": 5, "role": "LB" },
+          "def_6": { "x": -15, "z": 7, "role": "CB_L" },
+          "def_7": { "x": 15, "z": 7, "role": "CB_R" },
+          "def_8": { "x": -8, "z": 5, "role": "NICKEL_L" },
+          "def_9": { "x": 8, "z": 5, "role": "NICKEL_R" },
+          "def_10": { "x": -5, "z": 15, "role": "FS" },
+          "def_11": { "x": 5, "z": 12, "role": "SS" }
+        }
+      },
+      "goal_line": {
+        "description": "Heavy run stop formation",
+        "positions": {
+          "def_1": { "x": -1, "z": 1, "role": "DT1" },
+          "def_2": { "x": 1, "z": 1, "role": "DT2" },
+          "def_3": { "x": -3, "z": 1, "role": "DT3" },
+          "def_4": { "x": 3, "z": 1, "role": "DT4" },
+          "def_5": { "x": -5, "z": 1, "role": "DE_L" },
+          "def_6": { "x": 5, "z": 1, "role": "DE_R" },
+          "def_7": { "x": 0, "z": 3, "role": "MLB" },
+          "def_8": { "x": -4, "z": 3, "role": "LB_L" },
+          "def_9": { "x": 4, "z": 3, "role": "LB_R" },
+          "def_10": { "x": -10, "z": 5, "role": "CB_L" },
+          "def_11": { "x": 10, "z": 5, "role": "CB_R" }
+        }
+      },
+      "quarter": {
+        "description": "4 deep DBs, prevent",
+        "positions": {
+          "def_1": { "x": -1, "z": 1, "role": "DT1" },
+          "def_2": { "x": 1, "z": 1, "role": "DT2" },
+          "def_3": { "x": -5, "z": 1, "role": "DE_L" },
+          "def_4": { "x": 5, "z": 1, "role": "DE_R" },
+          "def_5": { "x": 0, "z": 5, "role": "LB" },
+          "def_6": { "x": -15, "z": 10, "role": "CB_L" },
+          "def_7": { "x": 15, "z": 10, "role": "CB_R" },
+          "def_8": { "x": -7, "z": 18, "role": "S1" },
+          "def_9": { "x": 7, "z": 18, "role": "S2" },
+          "def_10": { "x": -3, "z": 20, "role": "S3" },
+          "def_11": { "x": 3, "z": 20, "role": "S4" }
+        }
+      }
+    }
+  },
+  "plays": [
+    {
+      "id": "off_pro_iso_run",
+      "name": "Pro Set Iso Run",
+      "side": "offense",
+      "type": "run",
+      "formation": "pro_set",
+      "description": "HB dive through the B gap.",
+      "roles": [
+        { "position": "QB", "offset": { "x": 0, "z": -2 }, "assignment": "handoff_right" },
+        { "position": "HB", "offset": { "x": 0, "z": -7 }, "assignment": "run_b_gap" },
+        { "position": "FB", "offset": { "x": 0, "z": -5 }, "assignment": "lead_block" },
+        { "position": "C", "offset": { "x": 0, "z": 0 }, "assignment": "block" },
+        { "position": "LG", "offset": { "x": -2, "z": 0 }, "assignment": "block" },
+        { "position": "RG", "offset": { "x": 2, "z": 0 }, "assignment": "block" },
+        { "position": "LT", "offset": { "x": -4, "z": 0 }, "assignment": "block" },
+        { "position": "RT", "offset": { "x": 4, "z": 0 }, "assignment": "block" },
+        { "position": "TE", "offset": { "x": 6, "z": 0 }, "assignment": "block" },
+        { "position": "WR_L", "offset": { "x": -15, "z": 0 }, "assignment": "fly_route" },
+        { "position": "WR_R", "offset": { "x": 15, "z": 0 }, "assignment": "slant_route" }
+      ]
+    },
+    {
+      "id": "off_spread_pass",
+      "name": "Spread 4 Verts",
+      "side": "offense",
+      "type": "pass",
+      "formation": "spread",
+      "description": "4 Receivers go deep.",
+      "roles": [
+        { "position": "QB", "offset": { "x": 0, "z": -5 }, "assignment": "pass_deep" },
+        { "position": "RB", "offset": { "x": 2, "z": -5 }, "assignment": "block_pickup" },
+        { "position": "C", "offset": { "x": 0, "z": 0 }, "assignment": "block" },
+        { "position": "LG", "offset": { "x": -2, "z": 0 }, "assignment": "block" },
+        { "position": "RG", "offset": { "x": 2, "z": 0 }, "assignment": "block" },
+        { "position": "LT", "offset": { "x": -4, "z": 0 }, "assignment": "block" },
+        { "position": "RT", "offset": { "x": 4, "z": 0 }, "assignment": "block" },
+        { "position": "WR_L1", "offset": { "x": -15, "z": 0 }, "assignment": "fly_route" },
+        { "position": "WR_L2", "offset": { "x": -10, "z": 0 }, "assignment": "seam_route" },
+        { "position": "WR_R1", "offset": { "x": 15, "z": 0 }, "assignment": "fly_route" },
+        { "position": "WR_R2", "offset": { "x": 10, "z": 0 }, "assignment": "seam_route" }
+      ]
+    },
+    {
+      "id": "off_run_sweep_left",
+      "name": "Sweep Left",
+      "side": "offense",
+      "type": "run",
+      "formation": "i_form",
+      "description": "Toss to HB running left.",
+      "roles": []
+    },
+    {
+      "id": "off_run_sweep_right",
+      "name": "Sweep Right",
+      "side": "offense",
+      "type": "run",
+      "formation": "i_form",
+      "description": "Toss to HB running right.",
+      "roles": []
+    },
+    {
+      "id": "off_pass_screen",
+      "name": "HB Screen",
+      "side": "offense",
+      "type": "pass",
+      "formation": "shotgun",
+      "description": "Screen pass to HB.",
+      "roles": []
+    },
+    {
+      "id": "off_pass_slant",
+      "name": "Quick Slants",
+      "side": "offense",
+      "type": "pass",
+      "formation": "spread",
+      "description": "Quick slants for short gain.",
+      "roles": []
+    },
+    {
+      "id": "off_pass_hail_mary",
+      "name": "Hail Mary",
+      "side": "offense",
+      "type": "pass",
+      "formation": "trips",
+      "description": "Everyone go deep.",
+      "roles": []
+    },
+    {
+      "id": "off_run_draw",
+      "name": "QB Draw",
+      "side": "offense",
+      "type": "run",
+      "formation": "empty",
+      "description": "QB runs up the middle.",
+      "roles": []
+    },
+    {
+      "id": "off_run_power",
+      "name": "Power O",
+      "side": "offense",
+      "type": "run",
+      "formation": "strong_i",
+      "description": "Power run with pulling guard.",
+      "roles": []
+    },
+    {
+      "id": "def_43_man",
+      "name": "4-3 Man Coverage",
+      "side": "defense",
+      "type": "man",
+      "formation": "4-3",
+      "description": "Standard 4-3 defense with man coverage.",
+      "roles": [
+        { "position": "DT1", "offset": { "x": -1, "z": 1 }, "assignment": "rush" },
+        { "position": "DT2", "offset": { "x": 1, "z": 1 }, "assignment": "rush" },
+        { "position": "DE_L", "offset": { "x": -5, "z": 1 }, "assignment": "rush" },
+        { "position": "DE_R", "offset": { "x": 5, "z": 1 }, "assignment": "rush" },
+        { "position": "MLB", "offset": { "x": 0, "z": 5 }, "assignment": "man_rb" },
+        { "position": "OLB_L", "offset": { "x": -6, "z": 5 }, "assignment": "man_te" },
+        { "position": "OLB_R", "offset": { "x": 6, "z": 5 }, "assignment": "zone_flat" },
+        { "position": "CB_L", "offset": { "x": -15, "z": 5 }, "assignment": "man_wr" },
+        { "position": "CB_R", "offset": { "x": 15, "z": 5 }, "assignment": "man_wr" },
+        { "position": "FS", "offset": { "x": -5, "z": 15 }, "assignment": "zone_deep" },
+        { "position": "SS", "offset": { "x": 5, "z": 10 }, "assignment": "man_slot" }
+      ]
+    },
+    {
+      "id": "def_43_zone",
+      "name": "4-3 Cover 2",
+      "side": "defense",
+      "type": "zone",
+      "formation": "4-3",
+      "description": "2 Deep safeties.",
+      "roles": []
+    },
+    {
+      "id": "def_34_blitz",
+      "name": "3-4 Blitz",
+      "side": "defense",
+      "type": "blitz",
+      "formation": "3-4",
+      "description": "Linebackers blitzing.",
+      "roles": []
+    },
+    {
+      "id": "def_nickel_man",
+      "name": "Nickel Man",
+      "side": "defense",
+      "type": "man",
+      "formation": "nickel",
+      "description": "5 DBs for passing situations.",
+      "roles": []
+    },
+    {
+      "id": "def_dime_zone",
+      "name": "Dime Zone",
+      "side": "defense",
+      "type": "zone",
+      "formation": "dime",
+      "description": "6 DBs, prevent defense.",
+      "roles": []
+    },
+    {
+      "id": "def_goal_line",
+      "name": "Goal Line",
+      "side": "defense",
+      "type": "run_stop",
+      "formation": "goal_line",
+      "description": "Stop the run at all costs.",
+      "roles": []
+    },
+    {
+      "id": "def_cover_3",
+      "name": "Cover 3",
+      "side": "defense",
+      "type": "zone",
+      "formation": "4-3",
+      "description": "3 Deep zones.",
+      "roles": []
+    },
+    {
+      "id": "def_cover_1",
+      "name": "Cover 1",
+      "side": "defense",
+      "type": "man",
+      "formation": "4-3",
+      "description": "Man under, 1 deep safety.",
+      "roles": []
+    },
+    {
+      "id": "def_prevent",
+      "name": "Prevent",
+      "side": "defense",
+      "type": "zone",
+      "formation": "quarter",
+      "description": "Deep zones to prevent big play.",
+      "roles": []
+    }
+  ]
+}

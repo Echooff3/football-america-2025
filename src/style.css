@@ -1,0 +1,163 @@
+body {
+  margin: 0;
+  overflow: hidden;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: #1a1a1a;
+  color: white;
+}
+
+#game-container {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+canvas {
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+#ui-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.panel {
+  background: rgba(0, 0, 0, 0.8);
+  padding: 15px;
+  border-radius: 8px;
+  pointer-events: auto;
+}
+
+#controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+}
+
+#timeline {
+  flex-grow: 1;
+  cursor: pointer;
+}
+
+#play-selection {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(0, 0, 0, 0.9);
+  padding: 30px;
+  border-radius: 12px;
+  text-align: center;
+  pointer-events: auto;
+  display: none; /* Hidden by default */
+}
+
+#play-selection.active {
+  display: block;
+}
+
+.play-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 20px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.play-card {
+  background: #333;
+  padding: 10px;
+  border: 2px solid #444;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.play-card:hover {
+  border-color: #007acc;
+  background: #444;
+}
+
+.play-card.selected {
+  border-color: #00cc44;
+  background: #2a4a2a;
+}
+
+#settings-modal, #history-modal {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #222;
+  padding: 30px;
+  border-radius: 12px;
+  border: 1px solid #444;
+  pointer-events: auto;
+  display: none;
+  z-index: 100;
+  min-width: 300px;
+}
+
+#settings-modal.active, #history-modal.active {
+  display: block;
+}
+
+.history-item {
+  background: #333;
+  padding: 10px;
+  margin-bottom: 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.history-item:hover {
+  background: #444;
+}
+
+.history-item .timestamp {
+  font-size: 0.8em;
+  color: #aaa;
+}
+
+.history-item .result {
+  font-weight: bold;
+  color: #fff;
+}
+
+
+button {
+  background: #007acc;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #005fa3;
+}
+
+input, select {
+  background: #333;
+  color: white;
+  border: 1px solid #555;
+  padding: 5px;
+  margin-bottom: 10px;
+  width: 100%;
+}
