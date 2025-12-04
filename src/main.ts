@@ -156,6 +156,54 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         </div>
       </div>
     </div>
+
+    <div id="splash-screen" class="active">
+      <div class="splash-content">
+        <h1>🏈 Football America 2025</h1>
+        
+        <div class="splash-section important-note">
+          <h3>⚠️ Important: API Key Required</h3>
+          <p>This game uses AI to determine play outcomes. You'll need an API key from <a href="https://openrouter.ai" target="_blank">openrouter.ai</a> to play.</p>
+          <p>Once you have your key, click <strong>Settings</strong> to enter it.</p>
+        </div>
+
+        <div class="splash-section">
+          <h3>🎮 How to Play</h3>
+          <ol>
+            <li><strong>Start a New Play:</strong> Click "New Play" to begin selecting your offensive and defensive plays.</li>
+            <li><strong>Choose Offense:</strong> Select an offensive play from the playbook (run, pass, etc.).</li>
+            <li><strong>Choose Defense:</strong> Then select a defensive formation to counter.</li>
+            <li><strong>Watch the Action:</strong> The AI will analyze the matchup and simulate the play outcome.</li>
+            <li><strong>Use the Timeline:</strong> Scrub through the play, pause, and replay using the controls at the bottom.</li>
+            <li><strong>Ball View:</strong> Toggle "Ball View" to follow the action automatically.</li>
+          </ol>
+        </div>
+
+        <div class="splash-section">
+          <h3>📜 Replay System & History</h3>
+          <p>Click <strong>History</strong> to view all plays from your current session:</p>
+          <ul>
+            <li><strong>Current Drive:</strong> See a summary of your ongoing drive at the top.</li>
+            <li><strong>Replay Individual Plays:</strong> Click on any play to watch it again.</li>
+            <li><strong>Replay All:</strong> Watch your entire game history played back sequentially.</li>
+            <li><strong>Clear History:</strong> Start fresh by clearing all recorded plays.</li>
+          </ul>
+        </div>
+
+        <div class="splash-section warning-note">
+          <h3>⏱️ Response Times</h3>
+          <p>Different AI models have varying response times:</p>
+          <ul>
+            <li><strong>google/gemini-2.0-flash-exp:free</strong> — Fast responses, good for testing</li>
+            <li><strong>google/gemini-3-pro-preview</strong> — Higher quality but <strong>35+ seconds</strong> per response</li>
+            <li><strong>meta-llama/llama-3.3-70b-instruct:free</strong> — Free option with reasonable speed</li>
+          </ul>
+          <p><em>Please be patient while waiting for AI responses. The "Last request" timer shows how long the AI is taking.</em></p>
+        </div>
+
+        <button id="btn-close-splash" class="splash-start-btn">Got it, Let's Play! 🏈</button>
+      </div>
+    </div>
 `;
 
 // Initialize Game
@@ -197,6 +245,8 @@ const requestTimeDisplay = document.getElementById('request-time')!;
 const summaryCrawl = document.getElementById('summary-crawl')!;
 const summaryOutcome = document.getElementById('summary-outcome')!;
 const summaryText = document.getElementById('summary-text')!;
+const splashScreen = document.getElementById('splash-screen')!;
+const btnCloseSplash = document.getElementById('btn-close-splash')!;
 
 // Provider settings elements
 const providerOpenRouter = document.getElementById('provider-openrouter') as HTMLInputElement;
@@ -603,6 +653,18 @@ btnSaveSettings.onclick = () => {
 btnCloseSettings.onclick = () => {
   settingsModal.classList.remove('active');
 };
+
+// Splash screen
+btnCloseSplash.onclick = () => {
+  splashScreen.classList.remove('active');
+  // Save that user has seen the splash screen
+  localStorage.setItem('splashSeen', 'true');
+};
+
+// Check if user has seen splash screen before
+if (localStorage.getItem('splashSeen') === 'true') {
+  splashScreen.classList.remove('active');
+}
 
 // Playback Controls
 btnPlay.onclick = () => game.play();
