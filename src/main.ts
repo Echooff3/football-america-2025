@@ -25,6 +25,9 @@ let gameState: GameState = {
 // In-memory play history for current session
 let playHistory: { play: string; result: string; yardsGained: number; timestamp: number }[] = [];
 
+// History playback state
+let historyPlaybackAbortController: AbortController | null = null;
+
 document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
   <div id="game-container">
     <canvas id="renderCanvas"></canvas>
@@ -45,12 +48,26 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
           <span id="summary-outcome" style="font-weight: bold; text-transform: uppercase; margin-right: 8px;"></span>
           <span id="summary-text" style="font-size: 0.9em; color: #ccc;"></span>
         </div>
-        <div style="display: flex; gap: 10px; align-items: center;">
-          <button id="btn-play">Play</button>
-          <button id="btn-pause">Pause</button>
+        <div id="normal-controls">
+          <div style="display: flex; gap: 10px; align-items: center;">
+            <button id="btn-play">Play</button>
+            <button id="btn-pause">Pause</button>
+            <label style="display: flex; align-items: center; gap: 5px; margin-left: 15px; cursor: pointer;">
+              <input type="checkbox" id="ball-view-checkbox" checked>
+              <span>Ball View</span>
+            </label>
+          </div>
+          <input type="range" id="timeline" min="0" max="100" value="0" step="0.1" style="width: 100%; margin-top: 8px;">
+          <div style="text-align: right; font-size: 0.9em;"><span id="time-display">0.0s</span></div>
         </div>
-        <input type="range" id="timeline" min="0" max="100" value="0" step="0.1" style="width: 100%; margin-top: 8px;">
-        <div style="text-align: right; font-size: 0.9em;"><span id="time-display">0.0s</span></div>
+        <div id="history-playback-controls" style="display: none;">
+          <div style="display: flex; gap: 10px; align-items: center; justify-content: center;">
+            <button id="btn-stop-history" style="background: #aa3333; padding: 10px 30px;">⏹ Stop History Playback</button>
+          </div>
+          <div style="text-align: center; margin-top: 8px; font-size: 0.9em;">
+            <span id="history-playback-status">Playing history...</span>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -133,7 +150,10 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       </div>
       <div style="margin-top: 20px; display: flex; justify-content: space-between;">
         <button id="btn-clear-history" style="background: #aa3333;">Clear History</button>
-        <button id="btn-close-history">Close</button>
+        <div style="display: flex; gap: 10px;">
+          <button id="btn-replay-all" style="background: #3a7a3a;">▶ Replay All</button>
+          <button id="btn-close-history">Close</button>
+        </div>
       </div>
     </div>
 `;
@@ -157,13 +177,19 @@ const apiKeyInput = document.getElementById('api-key-input') as HTMLInputElement
 const modelInput = document.getElementById('model-select') as HTMLInputElement;
 const timeline = document.getElementById('timeline') as HTMLInputElement;
 const timeDisplay = document.getElementById('time-display')!;
-const btnPlay = document.getElementById('btn-play')!;
-const btnPause = document.getElementById('btn-pause')!;
+const btnPlay = document.getElementById('btn-play') as HTMLButtonElement;
+const btnPause = document.getElementById('btn-pause') as HTMLButtonElement;
+const ballViewCheckbox = document.getElementById('ball-view-checkbox') as HTMLInputElement;
 
 const historyModal = document.getElementById('history-modal')!;
 const historyList = document.getElementById('history-list')!;
 const btnCloseHistory = document.getElementById('btn-close-history')!;
 const btnClearHistory = document.getElementById('btn-clear-history')!;
+const btnReplayAll = document.getElementById('btn-replay-all')!;
+const normalControls = document.getElementById('normal-controls')!;
+const historyPlaybackControls = document.getElementById('history-playback-controls')!;
+const btnStopHistory = document.getElementById('btn-stop-history')!;
+const historyPlaybackStatus = document.getElementById('history-playback-status')!;
 const driveSummary = document.getElementById('drive-summary')!;
 const gameStatusDisplay = document.getElementById('game-status')!;
 const scoreDisplay = document.getElementById('score-display')!;
@@ -251,10 +277,20 @@ function calculateYardsGained(result: { outcome: string; summary: string }): num
 }
 
 // Helper function to switch possession between home and away
-function switchPossession() {
+// @param afterKickoff - If true, ball starts at typical kickoff position. If false (turnover), ball position is flipped.
+function switchPossession(afterKickoff: boolean = true) {
   gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
-  // Reset ball to opponent's side of field (they start their drive)
-  gameState.ballPosition = 25; // Typical kickoff return position
+  
+  if (afterKickoff) {
+    // After touchdown/kickoff - typical return position
+    gameState.ballPosition = 25;
+  } else {
+    // Turnover - ball position flips (e.g., offense at OPP 30 → defense takes over at their own 30)
+    gameState.ballPosition = 100 - gameState.ballPosition;
+    // Ensure ball position is in bounds after flip
+    gameState.ballPosition = Math.max(1, Math.min(99, gameState.ballPosition));
+  }
+  
   gameState.down = 1;
   gameState.yardsToGo = 10;
 }
@@ -281,19 +317,22 @@ function updateGameState(yardsGained: number, outcome: string) {
     }
     
     // Switch possession - other team gets the ball after kickoff
-    switchPossession();
+    switchPossession(true); // afterKickoff = true
     return;
   }
 
   if (outcome === 'interception' || outcome === 'turnover') {
-    // Turnover - other team gets the ball at current position
-    // For simplicity, reset to a standard position
-    switchPossession();
+    // Turnover - other team gets the ball at current position (flipped)
+    switchPossession(false); // afterKickoff = false (turnover)
     return;
   }
 
   // Normal play progression
   gameState.ballPosition += yardsGained;
+  
+  // Keep ball position in bounds (0-100)
+  // Note: 100+ would be a touchdown, but that should be handled by AI outcome
+  gameState.ballPosition = Math.max(1, Math.min(99, gameState.ballPosition));
   
   // Check for first down
   if (yardsGained >= gameState.yardsToGo) {
@@ -303,17 +342,11 @@ function updateGameState(yardsGained: number, outcome: string) {
     gameState.yardsToGo -= yardsGained;
     gameState.down++;
     
-    // Turnover on downs - other team gets the ball
+    // Turnover on downs - other team gets the ball at current spot
     if (gameState.down > 4) {
-      // Flip the ball position for the other team's perspective
-      // (e.g., if we were on our 40, they get it on their 60)
-      gameState.ballPosition = 100 - gameState.ballPosition;
-      switchPossession();
+      switchPossession(false); // afterKickoff = false (turnover on downs)
     }
   }
-
-  // Keep ball position in bounds
-  gameState.ballPosition = Math.max(1, Math.min(99, gameState.ballPosition));
 }
 
 // Populate Plays
@@ -426,13 +459,14 @@ btnConfirmPlay.onclick = async () => {
   const homeOnOffense = gameState.possession === 'home';
   game.setFieldOrientation(homeOnOffense);
   
-  // Set players to formation positions before simulation
-  game.setFormation(selectedOffensePlay.formation, selectedDefensePlay.formation);
+  // Animate players to formation positions before simulation
+  btnNewPlay.textContent = "Setting up...";
+  btnNewPlay.disabled = true;
+  await game.animateToFormation(selectedOffensePlay.formation, selectedDefensePlay.formation, 0.8);
   
   // Start Simulation
   try {
     btnNewPlay.textContent = "Simulating...";
-    btnNewPlay.disabled = true;
     
     const result = await aiService.simulatePlay(selectedOffensePlay, selectedDefensePlay, history);
     
@@ -445,13 +479,14 @@ btnConfirmPlay.onclick = async () => {
     updateGameState(yardsGained, result.outcome);
     updateHUD();
     
-    // Save to IndexedDB with game state
+    // Save to IndexedDB with game state and yards gained
     await gameHistoryService.addEntry({
       timestamp: Date.now(),
       offensePlay: selectedOffensePlay,
       defensePlay: selectedDefensePlay,
       result: result,
-      gameState: { ...gameState }
+      gameState: { ...gameState },
+      yardsGained: yardsGained
     });
 
     game.loadSimulation(result);
@@ -570,6 +605,11 @@ btnCloseSettings.onclick = () => {
 btnPlay.onclick = () => game.play();
 btnPause.onclick = () => game.pause();
 
+// Ball View toggle
+ballViewCheckbox.onchange = () => {
+  game.setBallViewMode(ballViewCheckbox.checked);
+};
+
 timeline.oninput = (e) => {
   const val = parseFloat((e.target as HTMLInputElement).value);
   game.scrub(val);
@@ -579,6 +619,13 @@ timeline.oninput = (e) => {
 game.onTimeUpdate = (time, total) => {
   timeline.value = time.toString();
   timeDisplay.textContent = `${time.toFixed(1)}s / ${total.toFixed(1)}s`;
+};
+
+// Handle playback completion - trigger touchdown celebration
+game.onPlaybackComplete = (outcome) => {
+  if (outcome === 'touchdown') {
+    game.celebrateTouchdown();
+  }
 };
 
 // History
@@ -616,6 +663,11 @@ btnHistory.onclick = async () => {
     const outcomeColor = entry.result.outcome === 'touchdown' ? '#4a4' : 
                          entry.result.outcome === 'interception' ? '#a44' : '#fff';
     
+    // Calculate yards for display
+    const yards = calculateYardsGainedFromEntry(entry);
+    const yardsText = yards >= 0 ? `+${yards}` : `${yards}`;
+    const yardsColor = yards > 0 ? '#4a4' : yards < 0 ? '#a44' : '#888';
+    
     const infoDiv = document.createElement('div');
     infoDiv.style.flex = '1';
     infoDiv.innerHTML = `
@@ -623,6 +675,14 @@ btnHistory.onclick = async () => {
       <div><strong>${entry.offensePlay.name}</strong> vs <strong>${entry.defensePlay.name}</strong></div>
       <div style="font-size: 0.85em; color: #aaa; margin-top: 3px;">${entry.result.summary || ''}</div>
     `;
+    
+    const yardsDiv = document.createElement('div');
+    yardsDiv.style.color = yardsColor;
+    yardsDiv.style.fontWeight = 'bold';
+    yardsDiv.style.marginRight = '10px';
+    yardsDiv.style.minWidth = '50px';
+    yardsDiv.style.textAlign = 'right';
+    yardsDiv.textContent = `${yardsText} yds`;
     
     const resultDiv = document.createElement('div');
     resultDiv.className = 'result';
@@ -642,6 +702,7 @@ btnHistory.onclick = async () => {
     };
     
     item.appendChild(infoDiv);
+    item.appendChild(yardsDiv);
     item.appendChild(resultDiv);
     item.appendChild(replayBtn);
     historyList.appendChild(item);
@@ -659,6 +720,215 @@ btnClearHistory.onclick = async () => {
     playHistory = [];
     driveSummary.innerHTML = '<div style="color: #888;">No plays yet this drive</div>';
     historyList.innerHTML = '<div style="color: #888; padding: 10px;">History cleared.</div>';
+  }
+};
+
+// Enable/disable main controls
+function setControlsEnabled(enabled: boolean) {
+  btnNewPlay.disabled = !enabled;
+  btnNewGame.disabled = !enabled;
+  btnSettings.style.pointerEvents = enabled ? 'auto' : 'none';
+  btnHistory.style.pointerEvents = enabled ? 'auto' : 'none';
+  btnPlay.disabled = !enabled;
+  btnPause.disabled = !enabled;
+  timeline.disabled = !enabled;
+  
+  // Visual feedback
+  const opacity = enabled ? '1' : '0.5';
+  btnNewPlay.style.opacity = opacity;
+  btnNewGame.style.opacity = opacity;
+  btnSettings.style.opacity = opacity;
+  btnHistory.style.opacity = opacity;
+}
+
+// Show/hide history playback UI
+function setHistoryPlaybackMode(active: boolean) {
+  normalControls.style.display = active ? 'none' : 'block';
+  historyPlaybackControls.style.display = active ? 'block' : 'none';
+  setControlsEnabled(!active);
+}
+
+// Sleep helper that respects abort signal
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(resolve, ms);
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        clearTimeout(timeout);
+        reject(new Error('Aborted'));
+      });
+    }
+  });
+}
+
+// Wait for play to finish
+function waitForPlayToFinish(signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new Error('Aborted'));
+      return;
+    }
+    
+    const checkInterval = setInterval(() => {
+      if (signal?.aborted) {
+        clearInterval(checkInterval);
+        reject(new Error('Aborted'));
+        return;
+      }
+      
+      // Check if playback is done (time reached total)
+      const timeValue = parseFloat(timeline.value);
+      const maxValue = parseFloat(timeline.max);
+      if (timeValue >= maxValue - 0.1) {
+        clearInterval(checkInterval);
+        resolve();
+      }
+    }, 100);
+    
+    // Also listen for abort
+    if (signal) {
+      signal.addEventListener('abort', () => {
+        clearInterval(checkInterval);
+        reject(new Error('Aborted'));
+      });
+    }
+  });
+}
+
+// Replay all history entries
+async function replayAllHistory() {
+  const entries = await gameHistoryService.getAllEntries();
+  if (entries.length === 0) {
+    alert('No history to replay!');
+    return;
+  }
+  
+  // Sort by timestamp (oldest first)
+  entries.sort((a, b) => a.timestamp - b.timestamp);
+  
+  // Close the modal
+  historyModal.classList.remove('active');
+  
+  // Enter history playback mode
+  setHistoryPlaybackMode(true);
+  
+  // Create abort controller
+  historyPlaybackAbortController = new AbortController();
+  const signal = historyPlaybackAbortController.signal;
+  
+  // Reset game state for playback
+  resetGameState();
+  updateHUD();
+  
+  try {
+    for (let i = 0; i < entries.length; i++) {
+      if (signal.aborted) break;
+      
+      const entry = entries[i];
+      historyPlaybackStatus.textContent = `Playing ${i + 1} of ${entries.length}: ${entry.offensePlay.name} vs ${entry.defensePlay.name}`;
+      
+      // Animate players to formation positions
+      await game.animateToFormation(entry.offensePlay.formation, entry.defensePlay.formation, 0.5);
+      
+      if (signal.aborted) break;
+      
+      // Small pause after formation
+      await sleep(300, signal);
+      
+      if (signal.aborted) break;
+      
+      // Load and play the simulation
+      game.loadSimulation(entry.result);
+      updateSummaryCrawl(entry.result.outcome, entry.result.summary);
+      timeline.max = (entry.result.frames[entry.result.frames.length - 1].tick / 10).toString();
+      game.play();
+      
+      // Wait for play to finish
+      await waitForPlayToFinish(signal);
+      
+      if (signal.aborted) break;
+      
+      // Update game state based on this play
+      const yardsGained = calculateYardsGainedFromEntry(entry);
+      updateGameStateFromReplay(yardsGained, entry.result.outcome);
+      updateHUD();
+      
+      // Pause between plays (unless it's the last one)
+      if (i < entries.length - 1) {
+        historyPlaybackStatus.textContent = `Completed ${i + 1} of ${entries.length}. Next play in 1s...`;
+        await sleep(1000, signal);
+      }
+    }
+    
+    if (!signal.aborted) {
+      historyPlaybackStatus.textContent = 'History playback complete!';
+      await sleep(1500);
+    }
+  } catch (e) {
+    // Aborted - that's fine
+    console.log('[History Playback] Stopped by user');
+  }
+  
+  // Exit history playback mode
+  setHistoryPlaybackMode(false);
+  historyPlaybackAbortController = null;
+  
+  // Restore the final state from history
+  await restoreGameFromHistory();
+}
+
+// Update game state during replay (similar to updateGameState but without saving)
+function updateGameStateFromReplay(yardsGained: number, outcome: string) {
+  if (outcome === 'touchdown') {
+    if (gameState.possession === 'home') {
+      gameState.homeScore += 7;
+    } else {
+      gameState.awayScore += 7;
+    }
+    // After TD kickoff - new team starts at their 25
+    gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
+    gameState.ballPosition = 25;
+    gameState.down = 1;
+    gameState.yardsToGo = 10;
+    return;
+  }
+
+  if (outcome === 'interception' || outcome === 'turnover') {
+    // Turnover - flip position for new team
+    gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
+    gameState.ballPosition = 100 - gameState.ballPosition;
+    gameState.down = 1;
+    gameState.yardsToGo = 10;
+    return;
+  }
+
+  gameState.ballPosition += yardsGained;
+  gameState.ballPosition = Math.max(1, Math.min(99, gameState.ballPosition));
+  
+  if (yardsGained >= gameState.yardsToGo) {
+    gameState.down = 1;
+    gameState.yardsToGo = 10;
+  } else {
+    gameState.yardsToGo -= yardsGained;
+    gameState.down++;
+    
+    // Turnover on downs - flip position for new team
+    if (gameState.down > 4) {
+      gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
+      gameState.ballPosition = 100 - gameState.ballPosition;
+      gameState.down = 1;
+      gameState.yardsToGo = 10;
+    }
+  }
+}
+
+// Replay All button handler
+btnReplayAll.onclick = () => replayAllHistory();
+
+// Stop history playback button
+btnStopHistory.onclick = () => {
+  if (historyPlaybackAbortController) {
+    historyPlaybackAbortController.abort();
   }
 };
 
@@ -745,15 +1015,15 @@ async function restoreGameFromHistory() {
       } else {
         gameState.awayScore += 7;
       }
-      // Switch possession after touchdown
+      // Switch possession after touchdown - other team starts at their 25
       gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
       gameState.ballPosition = 25;
       gameState.down = 1;
       gameState.yardsToGo = 10;
     } else if (outcome === 'interception' || outcome === 'turnover') {
-      // Switch possession on turnover
+      // Switch possession on turnover - flip ball position
       gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
-      gameState.ballPosition = 25;
+      gameState.ballPosition = 100 - gameState.ballPosition;
       gameState.down = 1;
       gameState.yardsToGo = 10;
     } else {
@@ -769,9 +1039,9 @@ async function restoreGameFromHistory() {
         gameState.down++;
         
         if (gameState.down > 4) {
-          // Turnover on downs
-          gameState.ballPosition = 100 - gameState.ballPosition;
+          // Turnover on downs - flip position for new team
           gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
+          gameState.ballPosition = 100 - gameState.ballPosition;
           gameState.down = 1;
           gameState.yardsToGo = 10;
         }
@@ -797,8 +1067,14 @@ async function restoreGameFromHistory() {
   // Set field orientation based on current possession
   game.setFieldOrientation(gameState.possession === 'home');
   
-  // Show the last play's summary
+  // Load the last play's simulation into the scrubber so it can be replayed
   const lastEntry = entries[entries.length - 1];
+  game.loadSimulation(lastEntry.result);
+  
+  // Update timeline UI with the last play's duration
+  timeline.max = (lastEntry.result.frames[lastEntry.result.frames.length - 1].tick / 10).toString();
+  
+  // Show the last play's summary
   updateSummaryCrawl(lastEntry.result.outcome, lastEntry.result.summary);
   
   console.log(`[Game] Restored: ${gameState.homeScore}-${gameState.awayScore}, ${formatDown(gameState.down)} & ${gameState.yardsToGo} at ${formatYardLine(gameState.ballPosition)}, ${gameState.possession.toUpperCase()} ball`);
@@ -806,6 +1082,12 @@ async function restoreGameFromHistory() {
 
 // Helper to calculate yards from a history entry
 function calculateYardsGainedFromEntry(entry: GameHistoryEntry): number {
+  // First, check if yardsGained was stored directly (new entries have this)
+  if (entry.yardsGained !== undefined && entry.yardsGained !== null) {
+    return entry.yardsGained;
+  }
+  
+  // Fallback: Try to extract yards from the summary (for legacy entries)
   const yardsMatch = entry.result.summary.match(/(\d+)\s*yard/i);
   if (yardsMatch) {
     const yards = parseInt(yardsMatch[1]);
@@ -814,7 +1096,16 @@ function calculateYardsGainedFromEntry(entry: GameHistoryEntry): number {
     }
     return yards;
   }
-  return 0;
+  
+  // Final fallback: Default yards based on outcome
+  switch (entry.result.outcome) {
+    case 'touchdown': return 10; // Assume minimum TD distance
+    case 'incomplete': return 0;
+    case 'interception': return 0;
+    case 'turnover': return 0;
+    case 'tackle': return 3; // Assume average gain for tackle
+    default: return 0;
+  }
 }
 
 // New Game button handler

@@ -22,8 +22,12 @@ export class Game {
   private playbackSpeed: number = 1.0;
   private totalDuration: number = 0;
   private ticksPerSecond: number = 10; // Assumed from AI prompt
+  private ballViewMode: boolean = true;
+  private lastBallPosition: BABYLON.Vector3 = BABYLON.Vector3.Zero();
+  private confettiSystem: BABYLON.ParticleSystem | null = null;
 
   public onTimeUpdate: ((time: number, total: number) => void) | null = null;
+  public onPlaybackComplete: ((outcome: string) => void) | null = null;
 
   constructor(canvasId: string) {
     this.canvas = document.getElementById(canvasId) as HTMLCanvasElement;
@@ -51,9 +55,17 @@ export class Game {
         if (this.playbackTime >= this.totalDuration) {
           this.playbackTime = this.totalDuration;
           this.isPlaying = false;
+          
+          // Trigger playback complete callback with outcome
+          if (this.onPlaybackComplete && this.simulationData) {
+            this.onPlaybackComplete(this.simulationData.outcome);
+          }
         }
         
         this.applyFrame(this.playbackTime);
+        
+        // Update ball view camera if enabled
+        this.updateBallViewCamera();
         
         if (this.onTimeUpdate) {
           this.onTimeUpdate(this.playbackTime, this.totalDuration);
@@ -103,7 +115,7 @@ export class Game {
   }
 
   /**
-   * Set players to their formation positions
+   * Set players to their formation positions (instant)
    */
   public setFormation(offenseFormationName: string, defenseFormationName: string) {
     const offenseFormation = playbook.formations.offense[offenseFormationName] || playbook.formations.offense['pro_set'];
@@ -143,6 +155,135 @@ export class Game {
     
     // Reset ball position
     this.ball.update({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 });
+  }
+
+  /**
+   * Animate players to their formation positions over a duration
+   * @param offenseFormationName - Name of the offense formation
+   * @param defenseFormationName - Name of the defense formation
+   * @param durationSeconds - How long the animation should take
+   * @returns Promise that resolves when animation is complete
+   */
+  public animateToFormation(offenseFormationName: string, defenseFormationName: string, durationSeconds: number = 0.5): Promise<void> {
+    return new Promise((resolve) => {
+      const offenseFormation = playbook.formations.offense[offenseFormationName] || playbook.formations.offense['pro_set'];
+      const defenseFormation = playbook.formations.defense[defenseFormationName] || playbook.formations.defense['4-3'];
+      
+      // Stop any active confetti from previous play
+      this.stopConfetti();
+      
+      // Reset camera to center on the ball/field
+      this.camera.target = BABYLON.Vector3.Zero();
+      this.camera.alpha = -Math.PI / 2; // Default angle looking at field
+      this.camera.beta = Math.PI / 4; // 45 degree angle from above
+      this.camera.radius = 50; // Default distance
+      
+      // Store start positions for all players
+      const startPositions: Map<string, { x: number; z: number; rotation: number }> = new Map();
+      
+      // Get current positions for offense
+      for (let i = 1; i <= 11; i++) {
+        const id = `off_${i}`;
+        const player = this.players.get(id);
+        if (player) {
+          startPositions.set(id, {
+            x: player.mesh.position.x,
+            z: player.mesh.position.z,
+            rotation: player.mesh.rotation.y
+          });
+        }
+      }
+      
+      // Get current positions for defense
+      for (let i = 1; i <= 11; i++) {
+        const id = `def_${i}`;
+        const player = this.players.get(id);
+        if (player) {
+          startPositions.set(id, {
+            x: player.mesh.position.x,
+            z: player.mesh.position.z,
+            rotation: player.mesh.rotation.y
+          });
+        }
+      }
+      
+      // Store ball start position
+      const ballStart = {
+        x: this.ball.mesh.position.x,
+        y: this.ball.mesh.position.y,
+        z: this.ball.mesh.position.z
+      };
+      
+      // Animation state
+      let elapsed = 0;
+      const durationMs = durationSeconds * 1000;
+      
+      // Create animation observer
+      const observer = this.scene.onBeforeRenderObservable.add(() => {
+        const dt = this.engine.getDeltaTime();
+        elapsed += dt;
+        
+        const t = Math.min(elapsed / durationMs, 1);
+        // Ease out cubic for smooth deceleration
+        const easedT = 1 - Math.pow(1 - t, 3);
+        
+        // Animate offense players
+        for (let i = 1; i <= 11; i++) {
+          const id = `off_${i}`;
+          const player = this.players.get(id);
+          const start = startPositions.get(id);
+          const targetPos = offenseFormation.positions[id];
+          
+          if (player && start && targetPos) {
+            player.update({
+              id,
+              x: BABYLON.Scalar.Lerp(start.x, targetPos.x, easedT),
+              z: BABYLON.Scalar.Lerp(start.z, targetPos.z, easedT),
+              rotation: BABYLON.Scalar.Lerp(start.rotation, 0, easedT),
+              animation: 'sprint'
+            });
+          }
+        }
+        
+        // Animate defense players
+        for (let i = 1; i <= 11; i++) {
+          const id = `def_${i}`;
+          const player = this.players.get(id);
+          const start = startPositions.get(id);
+          const targetPos = defenseFormation.positions[id];
+          
+          if (player && start && targetPos) {
+            player.update({
+              id,
+              x: BABYLON.Scalar.Lerp(start.x, targetPos.x, easedT),
+              z: BABYLON.Scalar.Lerp(start.z, targetPos.z, easedT),
+              rotation: BABYLON.Scalar.Lerp(start.rotation, Math.PI, easedT),
+              animation: 'sprint'
+            });
+          }
+        }
+        
+        // Animate ball to center
+        this.ball.update(
+          {
+            x: BABYLON.Scalar.Lerp(ballStart.x, 0, easedT),
+            y: BABYLON.Scalar.Lerp(ballStart.y, 0, easedT),
+            z: BABYLON.Scalar.Lerp(ballStart.z, 0, easedT)
+          },
+          { x: 0, y: 0, z: 0 }
+        );
+        
+        // Check if animation is complete
+        if (t >= 1) {
+          // Set final positions and idle animation
+          this.setFormation(offenseFormationName, defenseFormationName);
+          
+          // Remove observer
+          this.scene.onBeforeRenderObservable.remove(observer);
+          resolve();
+        }
+      });
+    });
   }
 
   /**
@@ -188,6 +329,50 @@ export class Game {
     if (this.onTimeUpdate) {
       this.onTimeUpdate(this.playbackTime, this.totalDuration);
     }
+  }
+
+  /**
+   * Enable or disable ball view mode (camera follows behind the ball)
+   */
+  public setBallViewMode(enabled: boolean) {
+    this.ballViewMode = enabled;
+    
+    if (enabled) {
+      // Switch to ball follow mode - camera will update in render loop
+      this.updateBallViewCamera();
+    } else {
+      // Reset to free-roaming camera
+      this.camera.target = BABYLON.Vector3.Zero();
+    }
+  }
+
+  /**
+   * Update camera to follow behind the ball
+   */
+  private updateBallViewCamera() {
+    if (!this.ballViewMode) return;
+    
+    const ballPos = this.ball.mesh.position.clone();
+    
+    // Calculate direction of ball movement
+    const direction = ballPos.subtract(this.lastBallPosition);
+    
+    // If ball is moving, orient camera behind the direction of movement
+    if (direction.length() > 0.01) {
+      // Calculate the angle to position camera behind the ball's movement
+      const angle = Math.atan2(direction.x, direction.z);
+      this.camera.alpha = -angle - Math.PI / 2; // Position camera behind
+    }
+    
+    // Set camera to look at ball position (slightly above)
+    this.camera.target = new BABYLON.Vector3(ballPos.x, ballPos.y + 1, ballPos.z);
+    
+    // Keep camera at a reasonable distance and angle
+    this.camera.beta = Math.PI / 4; // 45 degree angle from above
+    this.camera.radius = 20; // Distance from ball
+    
+    // Store last position for direction calculation
+    this.lastBallPosition = ballPos.clone();
   }
 
   private applyFrame(time: number) {
@@ -243,5 +428,148 @@ export class Game {
         x: 0, y: 0, z: 0 // Rotation interpolation omitted for brevity
       }
     );
+  }
+
+  /**
+   * Trigger touchdown celebration - move camera to ball and spawn confetti
+   */
+  public celebrateTouchdown() {
+    // Get ball position
+    const ballPos = this.ball.mesh.position.clone();
+    
+    // Find the closest offensive player to the ball (likely the scorer)
+    let closestPlayer: Player | null = null;
+    let closestDistance = Infinity;
+    
+    for (let i = 1; i <= 11; i++) {
+      const player = this.players.get(`off_${i}`);
+      if (player) {
+        const dist = BABYLON.Vector3.Distance(
+          new BABYLON.Vector3(player.mesh.position.x, 0, player.mesh.position.z),
+          new BABYLON.Vector3(ballPos.x, 0, ballPos.z)
+        );
+        if (dist < closestDistance) {
+          closestDistance = dist;
+          closestPlayer = player;
+        }
+      }
+    }
+    
+    // Position to focus on (ball or closest player)
+    const focusPos = closestPlayer ? closestPlayer.mesh.position.clone() : ballPos;
+    
+    // Move camera to focus on the touchdown
+    this.camera.target = new BABYLON.Vector3(focusPos.x, focusPos.y + 1, focusPos.z);
+    this.camera.alpha = -Math.PI / 2;
+    this.camera.beta = Math.PI / 3; // Lower angle to see player better
+    this.camera.radius = 15; // Closer view
+    
+    // Create confetti particle system
+    this.spawnConfetti(focusPos);
+  }
+
+  /**
+   * Spawn confetti particle effect at a position
+   */
+  private spawnConfetti(position: BABYLON.Vector3) {
+    // Dispose existing confetti if any
+    if (this.confettiSystem) {
+      this.confettiSystem.dispose();
+      this.confettiSystem = null;
+    }
+    
+    // Create particle system
+    const confetti = new BABYLON.ParticleSystem("confetti", 500, this.scene);
+    
+    // Use a simple texture (we'll create a procedural one)
+    const confettiTexture = new BABYLON.DynamicTexture("confettiTex", 64, this.scene, false);
+    const ctx = confettiTexture.getContext();
+    ctx.fillStyle = "white";
+    ctx.fillRect(0, 0, 64, 64);
+    confettiTexture.update();
+    confetti.particleTexture = confettiTexture;
+    
+    // Emission point - above the player
+    confetti.emitter = new BABYLON.Vector3(position.x, position.y + 3, position.z);
+    
+    // Emission box
+    confetti.minEmitBox = new BABYLON.Vector3(-2, 0, -2);
+    confetti.maxEmitBox = new BABYLON.Vector3(2, 2, 2);
+    
+    // Colors - multiple bright colors for confetti
+    confetti.color1 = new BABYLON.Color4(1, 0.2, 0.2, 1); // Red
+    confetti.color2 = new BABYLON.Color4(0.2, 0.5, 1, 1); // Blue
+    confetti.colorDead = new BABYLON.Color4(1, 1, 0, 0); // Yellow fade
+    
+    // Add color variation
+    confetti.addColorGradient(0, new BABYLON.Color4(1, 0.8, 0, 1)); // Gold
+    confetti.addColorGradient(0.25, new BABYLON.Color4(0.2, 1, 0.2, 1)); // Green
+    confetti.addColorGradient(0.5, new BABYLON.Color4(1, 0.2, 0.8, 1)); // Pink
+    confetti.addColorGradient(0.75, new BABYLON.Color4(0.2, 0.8, 1, 1)); // Cyan
+    confetti.addColorGradient(1, new BABYLON.Color4(1, 1, 1, 0)); // White fade out
+    
+    // Size
+    confetti.minSize = 0.1;
+    confetti.maxSize = 0.3;
+    
+    // Size over lifetime - flutter effect
+    confetti.addSizeGradient(0, 0.3);
+    confetti.addSizeGradient(0.5, 0.2);
+    confetti.addSizeGradient(1, 0.1);
+    
+    // Lifetime
+    confetti.minLifeTime = 2;
+    confetti.maxLifeTime = 4;
+    
+    // Emission rate
+    confetti.emitRate = 150;
+    
+    // Direction - upward burst then fall
+    confetti.direction1 = new BABYLON.Vector3(-3, 8, -3);
+    confetti.direction2 = new BABYLON.Vector3(3, 12, 3);
+    
+    // Gravity - make confetti fall
+    confetti.gravity = new BABYLON.Vector3(0, -5, 0);
+    
+    // Angular speed for spinning/tumbling effect
+    confetti.minAngularSpeed = -Math.PI * 2;
+    confetti.maxAngularSpeed = Math.PI * 2;
+    
+    // Initial speed
+    confetti.minEmitPower = 2;
+    confetti.maxEmitPower = 5;
+    
+    // Blend mode for nice visuals
+    confetti.blendMode = BABYLON.ParticleSystem.BLENDMODE_STANDARD;
+    
+    // Start the system
+    confetti.start();
+    this.confettiSystem = confetti;
+    
+    // Stop emitting after 2 seconds, let particles finish
+    setTimeout(() => {
+      if (this.confettiSystem) {
+        this.confettiSystem.stop();
+      }
+    }, 2000);
+    
+    // Dispose after all particles are gone
+    setTimeout(() => {
+      if (this.confettiSystem) {
+        this.confettiSystem.dispose();
+        this.confettiSystem = null;
+      }
+    }, 6000);
+  }
+
+  /**
+   * Stop and clean up any active confetti
+   */
+  public stopConfetti() {
+    if (this.confettiSystem) {
+      this.confettiSystem.stop();
+      this.confettiSystem.dispose();
+      this.confettiSystem = null;
+    }
   }
 }

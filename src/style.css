@@ -191,3 +191,10 @@ input, select {
   margin-bottom: 10px;
   width: 100%;
 }
+
+input[type="checkbox"] {
+  width: auto;
+  margin-bottom: 0;
+  accent-color: #007acc;
+  cursor: pointer;
+}

@@ -118,6 +118,7 @@ export interface GameHistoryEntry {
   defensePlay: Play;
   result: SimulationResult;
   gameState?: GameState;
+  yardsGained?: number; // Yards gained on this play (stored for accurate history)
 }
 
 export interface GameState {
