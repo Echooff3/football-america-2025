@@ -33,16 +33,24 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <h1 style="margin: 0; font-size: 1.2em;">Football America 2025</h1>
         <div id="score-display" style="font-size: 1.1em; margin: 5px 0;">HOME: 0 - AWAY: 0 | Q1</div>
         <div id="game-status">1st & 10 | Ball on 50</div>
+        <div id="request-time" style="font-size: 0.85em; color: #888; margin: 5px 0;">Last request: --</div>
         <button id="btn-settings">Settings</button>
         <button id="btn-history">History</button>
         <button id="btn-new-play">New Play</button>
+        <button id="btn-new-game" style="background: #aa3333;">New Game</button>
       </div>
       
       <div class="panel" id="controls">
-        <button id="btn-play">Play</button>
-        <button id="btn-pause">Pause</button>
-        <input type="range" id="timeline" min="0" max="100" value="0" step="0.1">
-        <span id="time-display">0.0s</span>
+        <div id="summary-crawl" style="display: none; text-align: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #444;">
+          <span id="summary-outcome" style="font-weight: bold; text-transform: uppercase; margin-right: 8px;"></span>
+          <span id="summary-text" style="font-size: 0.9em; color: #ccc;"></span>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <button id="btn-play">Play</button>
+          <button id="btn-pause">Pause</button>
+        </div>
+        <input type="range" id="timeline" min="0" max="100" value="0" step="0.1" style="width: 100%; margin-top: 8px;">
+        <div style="text-align: right; font-size: 0.9em;"><span id="time-display">0.0s</span></div>
       </div>
     </div>
 
@@ -114,7 +122,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       </div>
     </div>
 
-    <div id="history-modal" style="display:none;">
+    <div id="history-modal">
       <h2>Play History</h2>
       <div id="current-drive" style="background: #1a3a1a; padding: 10px; border-radius: 4px; margin-bottom: 10px;">
         <h3 style="margin: 0 0 10px 0; font-size: 0.9em;">Current Drive</h3>
@@ -139,6 +147,7 @@ const offenseGrid = document.getElementById('offense-plays')!;
 const defenseGrid = document.getElementById('defense-plays')!;
 const btnConfirmPlay = document.getElementById('btn-confirm-play') as HTMLButtonElement;
 const btnNewPlay = document.getElementById('btn-new-play') as HTMLButtonElement;
+const btnNewGame = document.getElementById('btn-new-game') as HTMLButtonElement;
 const btnSettings = document.getElementById('btn-settings')!;
 const btnHistory = document.getElementById('btn-history')!;
 const settingsModal = document.getElementById('settings-modal')!;
@@ -158,6 +167,10 @@ const btnClearHistory = document.getElementById('btn-clear-history')!;
 const driveSummary = document.getElementById('drive-summary')!;
 const gameStatusDisplay = document.getElementById('game-status')!;
 const scoreDisplay = document.getElementById('score-display')!;
+const requestTimeDisplay = document.getElementById('request-time')!;
+const summaryCrawl = document.getElementById('summary-crawl')!;
+const summaryOutcome = document.getElementById('summary-outcome')!;
+const summaryText = document.getElementById('summary-text')!;
 
 // Provider settings elements
 const providerOpenRouter = document.getElementById('provider-openrouter') as HTMLInputElement;
@@ -189,9 +202,28 @@ function updateHUD() {
   const downText = formatDown(gameState.down);
   const yardsText = gameState.yardsToGo >= 10 ? '10' : gameState.yardsToGo.toString();
   const yardLineText = formatYardLine(gameState.ballPosition);
+  const possessionText = gameState.possession === 'home' ? 'HOME' : 'AWAY';
   
-  gameStatusDisplay.textContent = `${downText} & ${yardsText} | Ball on ${yardLineText}`;
+  gameStatusDisplay.textContent = `${downText} & ${yardsText} | Ball on ${yardLineText} | ${possessionText} ball`;
   scoreDisplay.textContent = `HOME: ${gameState.homeScore} - AWAY: ${gameState.awayScore} | Q${gameState.quarter}`;
+}
+
+// Update summary crawl display
+function updateSummaryCrawl(outcome: string, summary: string) {
+  summaryCrawl.style.display = 'block';
+  summaryOutcome.textContent = outcome;
+  
+  // Color code the outcome
+  const outcomeColors: Record<string, string> = {
+    'touchdown': '#4a4',
+    'tackle': '#fff',
+    'incomplete': '#aa4',
+    'interception': '#a44',
+    'turnover': '#a44'
+  };
+  summaryOutcome.style.color = outcomeColors[outcome.toLowerCase()] || '#fff';
+  
+  summaryText.textContent = summary;
 }
 
 // Calculate yards gained from simulation result
@@ -218,6 +250,15 @@ function calculateYardsGained(result: { outcome: string; summary: string }): num
   }
 }
 
+// Helper function to switch possession between home and away
+function switchPossession() {
+  gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
+  // Reset ball to opponent's side of field (they start their drive)
+  gameState.ballPosition = 25; // Typical kickoff return position
+  gameState.down = 1;
+  gameState.yardsToGo = 10;
+}
+
 // Update game state after a play
 function updateGameState(yardsGained: number, outcome: string) {
   // Record the play in history
@@ -230,17 +271,24 @@ function updateGameState(yardsGained: number, outcome: string) {
 
   // Handle special outcomes
   if (outcome === 'touchdown') {
-    gameState.homeScore += 7;
-    gameState.ballPosition = 50; // Reset to 50
-    gameState.down = 1;
-    gameState.yardsToGo = 10;
+    // Add 7 points (6 for TD + 1 for extra point)
+    // TODO: Add QTE (Quick Time Event) for extra point attempt instead of auto-awarding
+    // For now, assume extra point is always good
+    if (gameState.possession === 'home') {
+      gameState.homeScore += 7;
+    } else {
+      gameState.awayScore += 7;
+    }
+    
+    // Switch possession - other team gets the ball after kickoff
+    switchPossession();
     return;
   }
 
   if (outcome === 'interception' || outcome === 'turnover') {
-    gameState.ballPosition = 50; // Reset to 50
-    gameState.down = 1;
-    gameState.yardsToGo = 10;
+    // Turnover - other team gets the ball at current position
+    // For simplicity, reset to a standard position
+    switchPossession();
     return;
   }
 
@@ -255,11 +303,12 @@ function updateGameState(yardsGained: number, outcome: string) {
     gameState.yardsToGo -= yardsGained;
     gameState.down++;
     
-    // Turnover on downs
+    // Turnover on downs - other team gets the ball
     if (gameState.down > 4) {
-      gameState.down = 1;
-      gameState.yardsToGo = 10;
-      gameState.ballPosition = 50; // Reset to 50
+      // Flip the ball position for the other team's perspective
+      // (e.g., if we were on our 40, they get it on their 60)
+      gameState.ballPosition = 100 - gameState.ballPosition;
+      switchPossession();
     }
   }
 
@@ -290,34 +339,80 @@ function renderPlays() {
 }
 
 function selectPlay(play: Play, side: 'offense' | 'defense', element: HTMLElement) {
+  // Home team is on offense when they have possession
+  const homeIsOnOffense = gameState.possession === 'home';
+  
   if (side === 'offense') {
     selectedOffensePlay = play;
     // Visual selection logic
     Array.from(offenseGrid.children).forEach(c => c.classList.remove('selected'));
     element.classList.add('selected');
     
-    // For demo, auto-switch to defense selection or just pick random defense
-    // Let's show defense grid now
-    offenseGrid.style.display = 'none';
-    defenseGrid.style.display = 'grid';
-    document.querySelector('#play-selection h2')!.textContent = "Choose Defense (CPU)";
+    // Check if both plays are now selected
+    if (selectedDefensePlay) {
+      // Both plays selected, enable confirm
+      btnConfirmPlay.disabled = false;
+    } else {
+      // After picking offense, switch to defense selection
+      offenseGrid.style.display = 'none';
+      defenseGrid.style.display = 'grid';
+      
+      if (homeIsOnOffense) {
+        // Home picked their offense, now pick opponent's defense (CPU)
+        document.querySelector('#play-selection h2')!.textContent = "Choose Defense (CPU)";
+      } else {
+        // Home is on defense, this was CPU's offense pick, now home picks their defense
+        document.querySelector('#play-selection h2')!.textContent = "Choose Defense";
+      }
+    }
   } else {
     selectedDefensePlay = play;
     Array.from(defenseGrid.children).forEach(c => c.classList.remove('selected'));
     element.classList.add('selected');
-    btnConfirmPlay.disabled = false;
+    
+    // Check if both plays are now selected
+    if (selectedOffensePlay) {
+      // Both plays selected, enable confirm
+      btnConfirmPlay.disabled = false;
+    } else {
+      // After picking defense, switch to offense selection
+      defenseGrid.style.display = 'none';
+      offenseGrid.style.display = 'grid';
+      
+      if (homeIsOnOffense) {
+        // Home is on offense, this was CPU's defense pick - shouldn't happen in normal flow
+        document.querySelector('#play-selection h2')!.textContent = "Choose Offense";
+      } else {
+        // Home picked their defense, now pick CPU's offense
+        document.querySelector('#play-selection h2')!.textContent = "Choose Offense (CPU)";
+      }
+    }
   }
 }
 
 // Event Listeners
 btnNewPlay.onclick = () => {
   playSelectionModal.classList.add('active');
-  offenseGrid.style.display = 'grid';
-  defenseGrid.style.display = 'none';
-  document.querySelector('#play-selection h2')!.textContent = "Choose Offense";
   selectedOffensePlay = null;
   selectedDefensePlay = null;
   btnConfirmPlay.disabled = true;
+  
+  // Check possession to determine which plays to show first
+  // Home team picks their side first, then picks for CPU opponent
+  const homeIsOnOffense = gameState.possession === 'home';
+  
+  if (homeIsOnOffense) {
+    // Home is on offense - show offense plays for user to pick first
+    offenseGrid.style.display = 'grid';
+    defenseGrid.style.display = 'none';
+    document.querySelector('#play-selection h2')!.textContent = "Choose Offense";
+  } else {
+    // Home is on defense - show defense plays for user to pick first
+    offenseGrid.style.display = 'none';
+    defenseGrid.style.display = 'grid';
+    document.querySelector('#play-selection h2')!.textContent = "Choose Defense";
+  }
+  
   // Reset selection visuals
   renderPlays();
 };
@@ -326,6 +421,10 @@ btnConfirmPlay.onclick = async () => {
   if (!selectedOffensePlay || !selectedDefensePlay) return;
   
   playSelectionModal.classList.remove('active');
+  
+  // Set field orientation based on possession (flip when home is on defense)
+  const homeOnOffense = gameState.possession === 'home';
+  game.setFieldOrientation(homeOnOffense);
   
   // Set players to formation positions before simulation
   game.setFormation(selectedOffensePlay.formation, selectedDefensePlay.formation);
@@ -356,6 +455,9 @@ btnConfirmPlay.onclick = async () => {
     });
 
     game.loadSimulation(result);
+    
+    // Update summary crawl for QA
+    updateSummaryCrawl(result.outcome, result.summary);
     
     // Update Timeline UI
     timeline.max = (result.frames[result.frames.length - 1].tick / 10).toString();
@@ -567,13 +669,160 @@ function loadHistoryEntry(entry: GameHistoryEntry) {
   if (entry.gameState) {
     gameState = { ...entry.gameState };
     updateHUD();
+    // Set field orientation based on possession
+    game.setFieldOrientation(gameState.possession === 'home');
   }
   
   game.loadSimulation(entry.result);
+  updateSummaryCrawl(entry.result.outcome, entry.result.summary);
   timeline.max = (entry.result.frames[entry.result.frames.length - 1].tick / 10).toString();
   game.play();
 }
 
+// Set up request time callback
+aiService.onRequestComplete = (durationMs: number) => {
+  const seconds = (durationMs / 1000).toFixed(2);
+  requestTimeDisplay.textContent = `Last request: ${seconds}s`;
+  requestTimeDisplay.style.color = durationMs < 5000 ? '#4a4' : durationMs < 15000 ? '#aa4' : '#a44';
+};
+
+// Reset game to initial state
+function resetGameState() {
+  gameState = {
+    down: 1,
+    yardsToGo: 10,
+    ballPosition: 50,
+    homeScore: 0,
+    awayScore: 0,
+    possession: 'home',
+    quarter: 1
+  };
+  playHistory = [];
+  history = [];
+  summaryCrawl.style.display = 'none';
+  updateHUD();
+  // Reset field orientation (home starts on offense)
+  game.setFieldOrientation(true);
+}
+
+// Start a new game - clear history and reset state
+async function startNewGame() {
+  if (!confirm('Start a new game? This will erase all play history.')) {
+    return;
+  }
+  await gameHistoryService.clearHistory();
+  resetGameState();
+  game.setFormation('pro_set', '4-3'); // Reset to default formations
+}
+
+// Restore game state from saved history
+async function restoreGameFromHistory() {
+  const entries = await gameHistoryService.getAllEntries();
+  if (entries.length === 0) {
+    console.log('[Game] No history found, starting fresh game');
+    return;
+  }
+  
+  // Sort by timestamp to replay in order
+  entries.sort((a, b) => a.timestamp - b.timestamp);
+  
+  console.log(`[Game] Restoring game state from ${entries.length} plays...`);
+  
+  // Reset to initial state first
+  resetGameState();
+  
+  // Replay each play to rebuild state by simulating outcomes
+  // This ensures possession is correctly tracked even for old entries
+  // that were saved before possession switching was implemented
+  for (const entry of entries) {
+    const yardsGained = calculateYardsGainedFromEntry(entry);
+    const outcome = entry.result.outcome;
+    
+    // Simulate game state changes based on outcome
+    if (outcome === 'touchdown') {
+      if (gameState.possession === 'home') {
+        gameState.homeScore += 7;
+      } else {
+        gameState.awayScore += 7;
+      }
+      // Switch possession after touchdown
+      gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
+      gameState.ballPosition = 25;
+      gameState.down = 1;
+      gameState.yardsToGo = 10;
+    } else if (outcome === 'interception' || outcome === 'turnover') {
+      // Switch possession on turnover
+      gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
+      gameState.ballPosition = 25;
+      gameState.down = 1;
+      gameState.yardsToGo = 10;
+    } else {
+      // Normal play - update ball position and check for first down
+      gameState.ballPosition += yardsGained;
+      gameState.ballPosition = Math.max(1, Math.min(99, gameState.ballPosition));
+      
+      if (yardsGained >= gameState.yardsToGo) {
+        gameState.down = 1;
+        gameState.yardsToGo = 10;
+      } else {
+        gameState.yardsToGo -= yardsGained;
+        gameState.down++;
+        
+        if (gameState.down > 4) {
+          // Turnover on downs
+          gameState.ballPosition = 100 - gameState.ballPosition;
+          gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
+          gameState.down = 1;
+          gameState.yardsToGo = 10;
+        }
+      }
+    }
+    
+    // Add to play history for display
+    playHistory.push({
+      play: `${entry.offensePlay.name} vs ${entry.defensePlay.name}`,
+      result: entry.result.outcome,
+      yardsGained,
+      timestamp: entry.timestamp
+    });
+    
+    // Add to AI context history
+    history.push(`Play: ${entry.offensePlay.name} vs ${entry.defensePlay.name} -> ${entry.result.summary}`);
+    if (history.length > 5) history.shift();
+  }
+  
+  // Update HUD with restored state
+  updateHUD();
+  
+  // Set field orientation based on current possession
+  game.setFieldOrientation(gameState.possession === 'home');
+  
+  // Show the last play's summary
+  const lastEntry = entries[entries.length - 1];
+  updateSummaryCrawl(lastEntry.result.outcome, lastEntry.result.summary);
+  
+  console.log(`[Game] Restored: ${gameState.homeScore}-${gameState.awayScore}, ${formatDown(gameState.down)} & ${gameState.yardsToGo} at ${formatYardLine(gameState.ballPosition)}, ${gameState.possession.toUpperCase()} ball`);
+}
+
+// Helper to calculate yards from a history entry
+function calculateYardsGainedFromEntry(entry: GameHistoryEntry): number {
+  const yardsMatch = entry.result.summary.match(/(\d+)\s*yard/i);
+  if (yardsMatch) {
+    const yards = parseInt(yardsMatch[1]);
+    if (entry.result.summary.toLowerCase().includes('loss') || entry.result.summary.toLowerCase().includes('behind')) {
+      return -yards;
+    }
+    return yards;
+  }
+  return 0;
+}
+
+// New Game button handler
+btnNewGame.onclick = () => startNewGame();
+
 // Initial Render
 renderPlays();
 updateHUD(); // Initialize HUD with starting state
+
+// Restore game from history on load
+restoreGameFromHistory();

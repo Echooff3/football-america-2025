@@ -11,6 +11,7 @@ export class Game {
   private engine: BABYLON.Engine;
   private scene: BABYLON.Scene;
   private camera!: BABYLON.ArcRotateCamera;
+  private fieldTexture!: BABYLON.Texture;
   
   private players: Map<string, Player> = new Map();
   private ball: Ball;
@@ -75,9 +76,9 @@ export class Game {
     // Ground (Field)
     const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 53.3, height: 100 }, scene);
     const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
-    const fieldTexture = new BABYLON.Texture("/src/assets/field.jpg", scene);
-    fieldTexture.wAng = Math.PI / 2; // Rotate 90 degrees
-    groundMat.diffuseTexture = fieldTexture;
+    this.fieldTexture = new BABYLON.Texture("/src/assets/field.jpg", scene);
+    this.fieldTexture.wAng = Math.PI / 2; // Rotate 90 degrees (default: home on offense)
+    groundMat.diffuseTexture = this.fieldTexture;
     ground.material = groundMat;
 
     return scene;
@@ -142,6 +143,20 @@ export class Game {
     
     // Reset ball position
     this.ball.update({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 });
+  }
+
+  /**
+   * Set the field orientation based on which team has possession
+   * @param homeOnOffense - true if home team (P1) is on offense, false if on defense
+   */
+  public setFieldOrientation(homeOnOffense: boolean) {
+    if (homeOnOffense) {
+      // Home on offense - default orientation (90 degrees)
+      this.fieldTexture.wAng = Math.PI / 2;
+    } else {
+      // Home on defense - flip 180 degrees (270 degrees total)
+      this.fieldTexture.wAng = (Math.PI / 2) + Math.PI;
+    }
   }
 
   public loadSimulation(result: SimulationResult) {

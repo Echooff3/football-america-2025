@@ -86,6 +86,10 @@ export class AIService {
   private isGraniteLoading: boolean = false;
   private graniteLoadProgress: number = 0;
   public onGraniteLoadProgress: ((progress: number, status: string) => void) | null = null;
+  
+  // Request timing metrics
+  private lastRequestDurationMs: number = 0;
+  public onRequestComplete: ((durationMs: number) => void) | null = null;
 
   constructor() {
     this.loadSettings();
@@ -115,6 +119,10 @@ export class AIService {
       isGraniteLoading: this.isGraniteLoading,
       graniteLoadProgress: this.graniteLoadProgress
     };
+  }
+
+  public getLastRequestDuration(): number {
+    return this.lastRequestDurationMs;
   }
 
   /**
@@ -224,10 +232,22 @@ export class AIService {
   }
 
   public async simulatePlay(offensePlay: Play, defensePlay: Play, history: string[]): Promise<SimulationResult> {
-    if (this.provider === 'granite') {
-      return this.simulatePlayWithGranite(offensePlay, defensePlay, history);
+    const startTime = performance.now();
+    try {
+      let result: SimulationResult;
+      if (this.provider === 'granite') {
+        result = await this.simulatePlayWithGranite(offensePlay, defensePlay, history);
+      } else {
+        result = await this.simulatePlayWithOpenRouter(offensePlay, defensePlay, history);
+      }
+      this.lastRequestDurationMs = performance.now() - startTime;
+      this.onRequestComplete?.(this.lastRequestDurationMs);
+      return result;
+    } catch (error) {
+      this.lastRequestDurationMs = performance.now() - startTime;
+      this.onRequestComplete?.(this.lastRequestDurationMs);
+      throw error;
     }
-    return this.simulatePlayWithOpenRouter(offensePlay, defensePlay, history);
   }
 
   /**
