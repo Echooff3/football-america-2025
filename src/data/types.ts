@@ -117,5 +117,16 @@ export interface GameHistoryEntry {
   offensePlay: Play;
   defensePlay: Play;
   result: SimulationResult;
+  gameState?: GameState;
+}
+
+export interface GameState {
+  down: number; // 1-4
+  yardsToGo: number; // yards needed for first down
+  ballPosition: number; // yard line (0-100, 50 is midfield)
+  homeScore: number;
+  awayScore: number;
+  possession: 'home' | 'away';
+  quarter: number;
 }
 

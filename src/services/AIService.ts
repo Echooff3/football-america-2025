@@ -1,9 +1,19 @@
 import { SimulationSchema, type SimulationResult, type Play, type Playbook } from '../data/types';
 import { expandKeyframes, type CompressedSimulation } from '../utils/interpolation';
 import playbookData from '../data/playbook.json';
+import {
+  AutoModelForCausalLM,
+  AutoTokenizer,
+  env,
+  type PreTrainedModel,
+  type PreTrainedTokenizer
+} from "@huggingface/transformers";
 
 const DEFAULT_MODEL = "amazon/nova-2-lite-v1";
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
+const GRANITE_MODEL_ID = "onnx-community/granite-4.0-1b-ONNX-web";
+
+export type AIProvider = 'openrouter' | 'granite';
 
 // Load playbook formations
 const playbook = playbookData as Playbook;
@@ -68,6 +78,14 @@ const COMPRESSED_SIMULATION_SCHEMA = {
 export class AIService {
   private apiKey: string | null = null;
   private model: string = DEFAULT_MODEL;
+  private provider: AIProvider = 'openrouter';
+  
+  // Granite model state
+  private graniteModel: PreTrainedModel | null = null;
+  private graniteTokenizer: PreTrainedTokenizer | null = null;
+  private isGraniteLoading: boolean = false;
+  private graniteLoadProgress: number = 0;
+  public onGraniteLoadProgress: ((progress: number, status: string) => void) | null = null;
 
   constructor() {
     this.loadSettings();
@@ -76,23 +94,331 @@ export class AIService {
   public loadSettings() {
     this.apiKey = localStorage.getItem('openrouter_api_key');
     this.model = localStorage.getItem('openrouter_model') || DEFAULT_MODEL;
+    this.provider = (localStorage.getItem('ai_provider') as AIProvider) || 'openrouter';
   }
 
-  public saveSettings(apiKey: string, model: string) {
+  public saveSettings(apiKey: string, model: string, provider: AIProvider) {
     this.apiKey = apiKey;
     this.model = model;
+    this.provider = provider;
     localStorage.setItem('openrouter_api_key', apiKey);
     localStorage.setItem('openrouter_model', model);
+    localStorage.setItem('ai_provider', provider);
   }
 
   public getSettings() {
     return {
       apiKey: this.apiKey,
-      model: this.model
+      model: this.model,
+      provider: this.provider,
+      isGraniteLoaded: this.graniteModel !== null && this.graniteTokenizer !== null,
+      isGraniteLoading: this.isGraniteLoading,
+      graniteLoadProgress: this.graniteLoadProgress
     };
   }
 
+  /**
+   * Load the Granite model for local inference
+   */
+  public async loadGraniteModel(): Promise<boolean> {
+    if (this.graniteModel && this.graniteTokenizer) {
+      console.log('[Granite] Model already loaded in memory');
+      return true; // Already loaded
+    }
+
+    if (this.isGraniteLoading) {
+      console.log('[Granite] Model is currently loading...');
+      return false; // Already loading
+    }
+
+    this.isGraniteLoading = true;
+    this.graniteLoadProgress = 0;
+
+    try {
+      // Configure transformers.js for browser with caching
+      console.log('[Granite] Configuring transformers.js...');
+      
+      // Enable WASM multi-threading if available
+      if (env.backends?.onnx?.wasm) {
+        env.backends.onnx.wasm.numThreads = navigator.hardwareConcurrency ?? 4;
+        console.log('[Granite] WASM threads:', navigator.hardwareConcurrency ?? 4);
+      }
+      
+      // CRITICAL: Enable browser cache and remote models
+      env.useBrowserCache = true;
+      env.allowRemoteModels = true;
+      env.allowLocalModels = false; // We're loading from HuggingFace Hub
+      
+      // Set cache directory (uses IndexedDB in browser)
+      // This ensures the model is cached and reused
+      console.log('[Granite] Browser cache enabled:', env.useBrowserCache);
+      console.log('[Granite] Cache dir:', env.cacheDir);
+
+      this.onGraniteLoadProgress?.(5, 'Checking cache...');
+      console.log('[Granite] Loading tokenizer from:', GRANITE_MODEL_ID);
+      console.time('[Granite] Tokenizer load time');
+      
+      this.onGraniteLoadProgress?.(10, 'Loading tokenizer...');
+      this.graniteTokenizer = await AutoTokenizer.from_pretrained(GRANITE_MODEL_ID, {
+        progress_callback: (progress: { status: string; file?: string; progress?: number; loaded?: number; total?: number }) => {
+          if (progress.status === 'download' && progress.file) {
+            const pct = progress.progress ? Math.round(progress.progress) : 0;
+            console.log(`[Granite] Downloading tokenizer: ${progress.file} - ${pct}%`);
+          } else if (progress.status === 'done') {
+            console.log(`[Granite] Tokenizer file loaded: ${progress.file}`);
+          } else if (progress.status === 'cached') {
+            console.log(`[Granite] Tokenizer loaded from cache: ${progress.file}`);
+          }
+        }
+      });
+      console.timeEnd('[Granite] Tokenizer load time');
+      
+      this.onGraniteLoadProgress?.(30, 'Loading model (this may take a while)...');
+      console.log('[Granite] Loading model from:', GRANITE_MODEL_ID);
+      console.time('[Granite] Model load time');
+      
+      this.graniteModel = await AutoModelForCausalLM.from_pretrained(GRANITE_MODEL_ID, {
+        dtype: "q4",
+        device: "webgpu",
+        progress_callback: (progress: { status: string; file?: string; progress?: number; loaded?: number; total?: number }) => {
+          if (progress.status === 'download' && progress.file) {
+            const pct = progress.progress ? Math.round(progress.progress) : 0;
+            const loadedMB = progress.loaded ? (progress.loaded / 1024 / 1024).toFixed(1) : '?';
+            const totalMB = progress.total ? (progress.total / 1024 / 1024).toFixed(1) : '?';
+            console.log(`[Granite] Downloading: ${progress.file} - ${pct}% (${loadedMB}/${totalMB} MB)`);
+            this.onGraniteLoadProgress?.(30 + pct * 0.65, `Downloading model: ${pct}%`);
+          } else if (progress.status === 'done') {
+            console.log(`[Granite] Model file loaded: ${progress.file}`);
+          } else if (progress.status === 'cached') {
+            console.log(`[Granite] Model loaded from cache: ${progress.file}`);
+            this.onGraniteLoadProgress?.(90, 'Loading from cache...');
+          } else if (progress.status === 'initiate') {
+            console.log(`[Granite] Initiating: ${progress.file}`);
+          } else if (progress.status === 'ready') {
+            console.log(`[Granite] Ready: ${progress.file}`);
+          } else {
+            console.log(`[Granite] Progress:`, progress);
+          }
+        }
+      });
+      console.timeEnd('[Granite] Model load time');
+
+      this.onGraniteLoadProgress?.(100, 'Model loaded!');
+      this.isGraniteLoading = false;
+      console.log('[Granite] Model successfully loaded and ready!');
+      return true;
+    } catch (error) {
+      console.error("[Granite] Error loading model:", error);
+      this.isGraniteLoading = false;
+      this.graniteModel = null;
+      this.graniteTokenizer = null;
+      throw error;
+    }
+  }
+
+  /**
+   * Check if Granite model is ready
+   */
+  public isGraniteReady(): boolean {
+    return this.graniteModel !== null && this.graniteTokenizer !== null;
+  }
+
   public async simulatePlay(offensePlay: Play, defensePlay: Play, history: string[]): Promise<SimulationResult> {
+    if (this.provider === 'granite') {
+      return this.simulatePlayWithGranite(offensePlay, defensePlay, history);
+    }
+    return this.simulatePlayWithOpenRouter(offensePlay, defensePlay, history);
+  }
+
+  /**
+   * Simulate play using local Granite model
+   */
+  private async simulatePlayWithGranite(offensePlay: Play, defensePlay: Play, _history: string[]): Promise<SimulationResult> {
+    if (!this.graniteModel || !this.graniteTokenizer) {
+      throw new Error("Granite model not loaded. Please load the model first in Settings.");
+    }
+
+    console.log('[Granite] Starting play simulation...');
+    console.time('[Granite] Total simulation time');
+
+    // Calculate chance modifiers based on play matchup
+    const chanceContext = this.calculateChanceModifiers(offensePlay, defensePlay);
+    
+    // Get formation starting positions
+    const offenseFormation = this.getFormationPositions(offensePlay.formation, 'offense');
+    const defenseFormation = this.getFormationPositions(defensePlay.formation, 'defense');
+
+    const prompt = `You are a football simulation engine. Generate JSON for a play simulation.
+
+PLAY MATCHUP:
+Offense: ${offensePlay.name} - ${offensePlay.description}
+Defense: ${defensePlay.name} - ${defensePlay.description}
+
+FORMATIONS:
+${offenseFormation}
+${defenseFormation}
+
+CHANCE FACTORS:
+${chanceContext}
+
+Generate a JSON response with this exact structure:
+{
+  "outcome": "touchdown|tackle|incomplete|interception|turnover",
+  "yardsGained": <number>,
+  "summary": "<brief play description>",
+  "keyframes": [
+    {"t": 0, "b": [0,0,0], "p": [["off_1",x,z,0,"idle"], ...], "e": ["snap"]},
+    {"t": 5, "b": [x,y,z], "p": [["off_1",x,z,rot,"sprint"], ...], "e": []},
+    ...
+  ]
+}
+
+Output ONLY valid JSON, no other text:`;
+
+    console.log('[Granite] Prompt length:', prompt.length, 'characters');
+
+    try {
+      const messages = [
+        {
+          role: "user",
+          content: prompt
+        }
+      ];
+
+      // Apply chat template
+      console.log('[Granite] Applying chat template...');
+      console.time('[Granite] Chat template');
+      const chatInput = this.graniteTokenizer.apply_chat_template(messages, {
+        add_generation_prompt: true,
+        return_dict: true,
+      }) as Record<string, unknown>;
+      console.timeEnd('[Granite] Chat template');
+
+      const inputIds = chatInput.input_ids as { dims: number[] };
+      console.log('[Granite] Input token count:', inputIds.dims[1]);
+
+      // Generate response
+      console.log('[Granite] Starting generation (max_new_tokens: 2048)...');
+      console.time('[Granite] Model generation');
+      const generateResult = await (this.graniteModel as any).generate({
+        ...chatInput,
+        max_new_tokens: 2048,
+        do_sample: true,
+        temperature: 0.7,
+        return_dict_in_generate: true,
+      });
+      console.timeEnd('[Granite] Model generation');
+
+      const outputTokenCount = generateResult.sequences.dims?.[1] - inputIds.dims[1];
+      console.log('[Granite] Output token count:', outputTokenCount);
+
+      // Decode response
+      console.log('[Granite] Decoding response...');
+      console.time('[Granite] Decode');
+      const response = this.graniteTokenizer.batch_decode(
+        generateResult.sequences.slice(null, [inputIds.dims[1], null]),
+        { skip_special_tokens: true }
+      )[0];
+      console.timeEnd('[Granite] Decode');
+
+      console.log("[Granite] Raw response:", response);
+      console.log("[Granite] Response length:", response.length, 'characters');
+
+      // Parse the JSON from response
+      console.log('[Granite] Parsing JSON...');
+      let jsonContent = response.trim();
+      jsonContent = this.stripMarkdownCodeFences(jsonContent);
+      jsonContent = this.stripJsonComments(jsonContent);
+      
+      // Try to extract JSON from the response
+      const jsonMatch = jsonContent.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error('[Granite] No JSON found in response');
+        throw new Error("Could not find JSON in Granite response");
+      }
+      jsonContent = jsonMatch[0];
+      console.log('[Granite] Extracted JSON length:', jsonContent.length);
+
+      let compressed: CompressedSimulation & { yardsGained: number };
+      try {
+        compressed = JSON.parse(jsonContent);
+        console.log('[Granite] JSON parsed successfully');
+      } catch (parseError) {
+        console.error("[Granite] Failed to parse JSON:", jsonContent);
+        console.log('[Granite] Falling back to generated simulation');
+        // Generate a fallback simple result
+        compressed = this.generateFallbackSimulation(offensePlay, defensePlay);
+      }
+
+      // Sanitize the response
+      compressed = this.sanitizeCompressedSimulation(compressed);
+
+      console.log(`[Granite] Received ${compressed.keyframes.length} keyframes, expanding with interpolation...`);
+
+      // Expand keyframes to full frames
+      const frames = expandKeyframes(compressed, 10, 'linear');
+
+      console.log(`[Granite] Expanded to ${frames.length} frames`);
+
+      const result: SimulationResult = {
+        outcome: compressed.outcome,
+        summary: compressed.summary,
+        frames
+      };
+
+      const parsed = SimulationSchema.parse(result);
+      console.timeEnd('[Granite] Total simulation time');
+      console.log('[Granite] Simulation complete:', parsed.outcome, '-', parsed.summary);
+      return parsed as SimulationResult;
+
+    } catch (error) {
+      console.timeEnd('[Granite] Total simulation time');
+      console.error("[Granite] Simulation failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Generate a fallback simulation when Granite output is invalid
+   */
+  private generateFallbackSimulation(offensePlay: Play, defensePlay: Play): CompressedSimulation & { yardsGained: number } {
+    const outcomes = ["touchdown", "tackle", "incomplete", "interception"] as const;
+    const outcome = outcomes[Math.floor(Math.random() * outcomes.length)];
+    const yardsGained = outcome === "touchdown" ? 50 : 
+                        outcome === "incomplete" ? 0 : 
+                        outcome === "interception" ? 0 : 
+                        Math.floor(Math.random() * 15) - 2;
+
+    return {
+      outcome,
+      yardsGained,
+      summary: `${offensePlay.name} vs ${defensePlay.name}: ${outcome}`,
+      keyframes: [
+        { t: 0, b: [0, 0, 0], p: this.generateBasicPlayerPositions(0), e: ["snap"] },
+        { t: 10, b: [0, 1, 5], p: this.generateBasicPlayerPositions(5), e: [] },
+        { t: 20, b: [0, 0, yardsGained], p: this.generateBasicPlayerPositions(yardsGained), e: [outcome] }
+      ]
+    };
+  }
+
+  /**
+   * Generate basic player positions for fallback
+   */
+  private generateBasicPlayerPositions(zOffset: number): [string, number, number, number, string][] {
+    const players: [string, number, number, number, string][] = [];
+    for (let i = 1; i <= 11; i++) {
+      players.push([`off_${i}`, (i - 6) * 2, -5 + zOffset, 0, "sprint"]);
+    }
+    for (let i = 1; i <= 11; i++) {
+      players.push([`def_${i}`, (i - 6) * 2, 5 + zOffset * 0.5, 180, "sprint"]);
+    }
+    return players;
+  }
+
+  /**
+   * Simulate play using OpenRouter API
+   */
+  private async simulatePlayWithOpenRouter(offensePlay: Play, defensePlay: Play, history: string[]): Promise<SimulationResult> {
     if (!this.apiKey) {
       throw new Error("OpenRouter API Key is missing. Please set it in Settings.");
     }

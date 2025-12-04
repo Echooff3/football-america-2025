@@ -13,6 +13,7 @@
     "vite": "^7.2.4"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.5.1",
     "babylonjs": "^7.0.0",
     "babylonjs-loaders": "^7.0.0",
     "idb": "^8.0.3",

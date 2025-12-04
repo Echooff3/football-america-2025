@@ -107,7 +107,8 @@ canvas {
   pointer-events: auto;
   display: none;
   z-index: 100;
-  min-width: 300px;
+  min-width: 400px;
+  max-width: 600px;
 }
 
 #settings-modal.active, #history-modal.active {
@@ -137,6 +138,33 @@ canvas {
 .history-item .result {
   font-weight: bold;
   color: #fff;
+}
+
+.replay-btn {
+  background: #007acc;
+  border: none;
+  color: white;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.replay-btn:hover {
+  background: #005fa3;
+}
+
+#current-drive {
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+#game-status {
+  font-size: 1em;
+  color: #4a4;
+  margin: 5px 0;
+}
+
+#score-display {
+  font-weight: bold;
 }
 
 
