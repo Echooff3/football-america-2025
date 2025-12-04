@@ -25,6 +25,7 @@ export class Game {
   private ballViewMode: boolean = true;
   private lastBallPosition: BABYLON.Vector3 = BABYLON.Vector3.Zero();
   private confettiSystem: BABYLON.ParticleSystem | null = null;
+  private lineOfScrimmageZ: number = 0; // Z offset based on ball position (yard line)
 
   public onTimeUpdate: ((time: number, total: number) => void) | null = null;
   public onPlaybackComplete: ((outcome: string) => void) | null = null;
@@ -121,7 +122,7 @@ export class Game {
     const offenseFormation = playbook.formations.offense[offenseFormationName] || playbook.formations.offense['pro_set'];
     const defenseFormation = playbook.formations.defense[defenseFormationName] || playbook.formations.defense['4-3'];
     
-    // Update offense positions
+    // Update offense positions (with line of scrimmage offset)
     for (let i = 1; i <= 11; i++) {
       const id = `off_${i}`;
       const player = this.players.get(id);
@@ -130,14 +131,14 @@ export class Game {
         player.update({
           id,
           x: pos.x,
-          z: pos.z,
+          z: pos.z + this.lineOfScrimmageZ,
           rotation: 0,
           animation: 'idle'
         });
       }
     }
     
-    // Update defense positions
+    // Update defense positions (with line of scrimmage offset)
     for (let i = 1; i <= 11; i++) {
       const id = `def_${i}`;
       const player = this.players.get(id);
@@ -146,15 +147,15 @@ export class Game {
         player.update({
           id,
           x: pos.x,
-          z: pos.z,
+          z: pos.z + this.lineOfScrimmageZ,
           rotation: Math.PI, // Face toward offense
           animation: 'idle'
         });
       }
     }
     
-    // Reset ball position
-    this.ball.update({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 0 });
+    // Reset ball position to line of scrimmage
+    this.ball.update({ x: 0, y: 0, z: this.lineOfScrimmageZ }, { x: 0, y: 0, z: 0 });
   }
 
   /**
@@ -172,8 +173,8 @@ export class Game {
       // Stop any active confetti from previous play
       this.stopConfetti();
       
-      // Reset camera to center on the ball/field
-      this.camera.target = BABYLON.Vector3.Zero();
+      // Reset camera to center on the line of scrimmage
+      this.camera.target = new BABYLON.Vector3(0, 0, this.lineOfScrimmageZ);
       this.camera.alpha = -Math.PI / 2; // Default angle looking at field
       this.camera.beta = Math.PI / 4; // 45 degree angle from above
       this.camera.radius = 50; // Default distance
@@ -238,7 +239,7 @@ export class Game {
             player.update({
               id,
               x: BABYLON.Scalar.Lerp(start.x, targetPos.x, easedT),
-              z: BABYLON.Scalar.Lerp(start.z, targetPos.z, easedT),
+              z: BABYLON.Scalar.Lerp(start.z, targetPos.z + this.lineOfScrimmageZ, easedT),
               rotation: BABYLON.Scalar.Lerp(start.rotation, 0, easedT),
               animation: 'sprint'
             });
@@ -256,19 +257,19 @@ export class Game {
             player.update({
               id,
               x: BABYLON.Scalar.Lerp(start.x, targetPos.x, easedT),
-              z: BABYLON.Scalar.Lerp(start.z, targetPos.z, easedT),
+              z: BABYLON.Scalar.Lerp(start.z, targetPos.z + this.lineOfScrimmageZ, easedT),
               rotation: BABYLON.Scalar.Lerp(start.rotation, Math.PI, easedT),
               animation: 'sprint'
             });
           }
         }
         
-        // Animate ball to center
+        // Animate ball to line of scrimmage
         this.ball.update(
           {
             x: BABYLON.Scalar.Lerp(ballStart.x, 0, easedT),
             y: BABYLON.Scalar.Lerp(ballStart.y, 0, easedT),
-            z: BABYLON.Scalar.Lerp(ballStart.z, 0, easedT)
+            z: BABYLON.Scalar.Lerp(ballStart.z, this.lineOfScrimmageZ, easedT)
           },
           { x: 0, y: 0, z: 0 }
         );
@@ -298,6 +299,54 @@ export class Game {
       // Home on defense - flip 180 degrees (270 degrees total)
       this.fieldTexture.wAng = (Math.PI / 2) + Math.PI;
     }
+    
+    // Update player colors based on possession
+    this.setTeamColors(homeOnOffense);
+  }
+
+  /**
+   * Set team colors based on which team has possession
+   * @param homeOnOffense - true if home team is on offense
+   */
+  private setTeamColors(homeOnOffense: boolean) {
+    // Home team is always blue, away team is always red
+    // When home is on offense: offense players = blue, defense players = red
+    // When home is on defense (away on offense): offense players = red, defense players = blue
+    const offenseColor = homeOnOffense ? BABYLON.Color3.Blue() : BABYLON.Color3.Red();
+    const defenseColor = homeOnOffense ? BABYLON.Color3.Red() : BABYLON.Color3.Blue();
+    
+    // Update offense player colors
+    for (let i = 1; i <= 11; i++) {
+      const player = this.players.get(`off_${i}`);
+      if (player) {
+        player.setColor(offenseColor);
+      }
+    }
+    
+    // Update defense player colors
+    for (let i = 1; i <= 11; i++) {
+      const player = this.players.get(`def_${i}`);
+      if (player) {
+        player.setColor(defenseColor);
+      }
+    }
+  }
+
+  /**
+   * Set the line of scrimmage based on ball position
+   * @param yardLine - Ball position from 0-100 (0=own end zone, 50=midfield, 100=opponent end zone)
+   * @param _homeOnOffense - Unused, kept for API compatibility
+   */
+  public setLineOfScrimmage(yardLine: number, _homeOnOffense: boolean) {
+    // Field Z-axis: -50 to +50, center at 0
+    // The field texture is rotated 180° when away team is on offense,
+    // which visually flips the end zones. The coordinate mapping stays the same:
+    //   yardLine 0 = own end zone = Z -50
+    //   yardLine 50 = midfield = Z 0
+    //   yardLine 100 = opponent's end zone = Z +50
+    // The texture flip handles the visual representation, so we use the same
+    // formula regardless of who's on offense.
+    this.lineOfScrimmageZ = yardLine - 50;
   }
 
   public loadSimulation(result: SimulationResult) {

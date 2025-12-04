@@ -27,6 +27,13 @@ export class Player {
     // In the future, we can handle animations here based on state.animation
   }
 
+  /**
+   * Set the player's color
+   */
+  public setColor(color: BABYLON.Color3) {
+    this.material.diffuseColor = color;
+  }
+
   public dispose() {
     this.mesh.dispose();
     this.material.dispose();

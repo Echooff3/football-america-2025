@@ -459,6 +459,9 @@ btnConfirmPlay.onclick = async () => {
   const homeOnOffense = gameState.possession === 'home';
   game.setFieldOrientation(homeOnOffense);
   
+  // Set line of scrimmage based on current ball position
+  game.setLineOfScrimmage(gameState.ballPosition, homeOnOffense);
+  
   // Animate players to formation positions before simulation
   btnNewPlay.textContent = "Setting up...";
   btnNewPlay.disabled = true;
@@ -827,6 +830,11 @@ async function replayAllHistory() {
       const entry = entries[i];
       historyPlaybackStatus.textContent = `Playing ${i + 1} of ${entries.length}: ${entry.offensePlay.name} vs ${entry.defensePlay.name}`;
       
+      // Set field orientation and line of scrimmage based on current game state
+      const homeOnOffense = gameState.possession === 'home';
+      game.setFieldOrientation(homeOnOffense);
+      game.setLineOfScrimmage(gameState.ballPosition, homeOnOffense);
+      
       // Animate players to formation positions
       await game.animateToFormation(entry.offensePlay.formation, entry.defensePlay.formation, 0.5);
       
@@ -940,7 +948,10 @@ function loadHistoryEntry(entry: GameHistoryEntry) {
     gameState = { ...entry.gameState };
     updateHUD();
     // Set field orientation based on possession
-    game.setFieldOrientation(gameState.possession === 'home');
+    const homeOnOffense = gameState.possession === 'home';
+    game.setFieldOrientation(homeOnOffense);
+    // Set line of scrimmage based on ball position
+    game.setLineOfScrimmage(gameState.ballPosition, homeOnOffense);
   }
   
   game.loadSimulation(entry.result);
@@ -973,6 +984,8 @@ function resetGameState() {
   updateHUD();
   // Reset field orientation (home starts on offense)
   game.setFieldOrientation(true);
+  // Reset line of scrimmage to midfield
+  game.setLineOfScrimmage(50, true);
 }
 
 // Start a new game - clear history and reset state
