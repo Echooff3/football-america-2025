@@ -19,7 +19,8 @@ let gameState: GameState = {
   homeScore: 0,
   awayScore: 0,
   possession: 'home',
-  quarter: 1
+  quarter: 1,
+  timeRemaining: 300 // 5 minutes per quarter (in seconds)
 };
 
 // In-memory play history for current session
@@ -35,6 +36,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <div class="panel" style="align-self: flex-start;">
         <h1 style="margin: 0; font-size: 1.2em;">Football America 2025</h1>
         <div id="score-display" style="font-size: 1.1em; margin: 5px 0;">HOME: 0 - AWAY: 0 | Q1</div>
+        <div id="clock-display" style="font-size: 1em; margin: 5px 0; color: #ff9900;">5:00</div>
         <div id="game-status">1st & 10 | Ball on 50</div>
         <div id="request-time" style="font-size: 0.85em; color: #888; margin: 5px 0;">Last request: --</div>
         <button id="btn-settings">Settings</button>
@@ -151,9 +153,20 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
       <div style="margin-top: 20px; display: flex; justify-content: space-between;">
         <button id="btn-clear-history" style="background: #aa3333;">Clear History</button>
         <div style="display: flex; gap: 10px;">
+          <button id="btn-copy-history-json" style="background: #3a5a7a;">📋 Copy JSON</button>
           <button id="btn-replay-all" style="background: #3a7a3a;">▶ Replay All</button>
           <button id="btn-close-history">Close</button>
         </div>
+      </div>
+    </div>
+
+    <div id="json-display-modal">
+      <h2>History Data (JSON)</h2>
+      <p style="font-size: 0.9em; color: #aaa; margin-bottom: 10px;">Select all text below and copy manually:</p>
+      <textarea id="json-display-textarea" readonly style="width: 100%; height: 400px; font-family: monospace; font-size: 0.85em; background: #1a1a1a; color: #0f0; border: 1px solid #444; padding: 10px; resize: vertical;"></textarea>
+      <div style="margin-top: 15px; display: flex; gap: 10px; justify-content: flex-end;">
+        <button id="btn-select-all-json">Select All</button>
+        <button id="btn-close-json-modal">Close</button>
       </div>
     </div>
 
@@ -233,6 +246,7 @@ const historyModal = document.getElementById('history-modal')!;
 const historyList = document.getElementById('history-list')!;
 const btnCloseHistory = document.getElementById('btn-close-history')!;
 const btnClearHistory = document.getElementById('btn-clear-history')!;
+const btnCopyHistoryJson = document.getElementById('btn-copy-history-json')!;
 const btnReplayAll = document.getElementById('btn-replay-all')!;
 const normalControls = document.getElementById('normal-controls')!;
 const historyPlaybackControls = document.getElementById('history-playback-controls')!;
@@ -241,6 +255,11 @@ const historyPlaybackStatus = document.getElementById('history-playback-status')
 const driveSummary = document.getElementById('drive-summary')!;
 const gameStatusDisplay = document.getElementById('game-status')!;
 const scoreDisplay = document.getElementById('score-display')!;
+const jsonDisplayModal = document.getElementById('json-display-modal')!;
+const jsonDisplayTextarea = document.getElementById('json-display-textarea') as HTMLTextAreaElement;
+const btnSelectAllJson = document.getElementById('btn-select-all-json')!;
+const btnCloseJsonModal = document.getElementById('btn-close-json-modal')!;
+const clockDisplay = document.getElementById('clock-display')!;
 const requestTimeDisplay = document.getElementById('request-time')!;
 const summaryCrawl = document.getElementById('summary-crawl')!;
 const summaryOutcome = document.getElementById('summary-outcome')!;
@@ -273,15 +292,33 @@ function formatYardLine(yardLine: number): string {
   return `OWN ${yardLine}`;
 }
 
+// Helper function to format time (MM:SS)
+function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
 // Update HUD display
 function updateHUD() {
   const downText = formatDown(gameState.down);
-  const yardsText = gameState.yardsToGo >= 10 ? '10' : gameState.yardsToGo.toString();
+  const yardsText = gameState.yardsToGo.toString();
   const yardLineText = formatYardLine(gameState.ballPosition);
   const possessionText = gameState.possession === 'home' ? 'HOME' : 'AWAY';
   
   gameStatusDisplay.textContent = `${downText} & ${yardsText} | Ball on ${yardLineText} | ${possessionText} ball`;
   scoreDisplay.textContent = `HOME: ${gameState.homeScore} - AWAY: ${gameState.awayScore} | Q${gameState.quarter}`;
+  clockDisplay.textContent = formatTime(gameState.timeRemaining);
+  
+  // Check if game is over
+  if (gameState.quarter > 4) {
+    const winner = gameState.homeScore > gameState.awayScore ? 'HOME' : 
+                   gameState.awayScore > gameState.homeScore ? 'AWAY' : 'TIE';
+    gameStatusDisplay.textContent = `FINAL | ${winner === 'TIE' ? 'Game Tied!' : winner + ' WINS!'}`;
+    clockDisplay.textContent = '0:00';
+    btnNewPlay.disabled = true;
+    btnNewPlay.textContent = 'Game Over';
+  }
 }
 
 // Update summary crawl display
@@ -329,6 +366,7 @@ function calculateYardsGained(result: { outcome: string; summary: string }): num
 // Helper function to switch possession between home and away
 // @param afterKickoff - If true, ball starts at typical kickoff position. If false (turnover), ball position is flipped.
 function switchPossession(afterKickoff: boolean = true) {
+  const oldPossession = gameState.possession;
   gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
   
   if (afterKickoff) {
@@ -343,10 +381,35 @@ function switchPossession(afterKickoff: boolean = true) {
   
   gameState.down = 1;
   gameState.yardsToGo = 10;
+  
+  console.log(`⚡ Possession changed: ${oldPossession} → ${gameState.possession} | Ball at ${gameState.ballPosition} yard line`);
 }
 
 // Update game state after a play
-function updateGameState(yardsGained: number, outcome: string) {
+function updateGameState(yardsGained: number, outcome: string, timeElapsed: number = 15) {
+  // Deduct time from the clock
+  gameState.timeRemaining -= timeElapsed;
+  
+  // Handle quarter transitions
+  if (gameState.timeRemaining <= 0) {
+    if (gameState.quarter < 4) {
+      // Move to next quarter
+      gameState.quarter++;
+      gameState.timeRemaining = 300; // Reset to 5 minutes
+      
+      // Switch possession at halftime (after Q2)
+      if (gameState.quarter === 3) {
+        switchPossession(true); // Halftime kickoff
+      }
+    } else {
+      // Game over
+      gameState.quarter = 5; // Signal game is over
+      gameState.timeRemaining = 0;
+      updateHUD();
+      return;
+    }
+  }
+  
   // Record the play in history
   playHistory.push({
     play: `${selectedOffensePlay?.name || 'Unknown'} vs ${selectedDefensePlay?.name || 'Unknown'}`,
@@ -360,13 +423,17 @@ function updateGameState(yardsGained: number, outcome: string) {
     // Add 7 points (6 for TD + 1 for extra point)
     // TODO: Add QTE (Quick Time Event) for extra point attempt instead of auto-awarding
     // For now, assume extra point is always good
+    const scoringTeam = gameState.possession;
     if (gameState.possession === 'home') {
       gameState.homeScore += 7;
+      console.log('🏈 TOUCHDOWN! HOME scores. HOME:', gameState.homeScore, 'AWAY:', gameState.awayScore);
     } else {
       gameState.awayScore += 7;
+      console.log('🏈 TOUCHDOWN! AWAY scores. HOME:', gameState.homeScore, 'AWAY:', gameState.awayScore);
     }
     
     // Switch possession - other team gets the ball after kickoff
+    console.log(`Switching possession from ${scoringTeam} to`, scoringTeam === 'home' ? 'away' : 'home');
     switchPossession(true); // afterKickoff = true
     return;
   }
@@ -507,6 +574,11 @@ btnConfirmPlay.onclick = async () => {
   
   // Set field orientation based on possession (flip when home is on defense)
   const homeOnOffense = gameState.possession === 'home';
+  console.log(`🎮 Starting play: ${selectedOffensePlay.name} vs ${selectedDefensePlay.name}`);
+  console.log(`   Possession: ${gameState.possession} (${homeOnOffense ? 'Home on OFFENSE' : 'Home on DEFENSE'})`);
+  console.log(`   Down: ${gameState.down}, Yards to go: ${gameState.yardsToGo}, Ball: ${gameState.ballPosition}`);
+  console.log(`   Score - HOME: ${gameState.homeScore}, AWAY: ${gameState.awayScore}`);
+  
   game.setFieldOrientation(homeOnOffense);
   
   // Set line of scrimmage based on current ball position
@@ -529,7 +601,8 @@ btnConfirmPlay.onclick = async () => {
     
     // Calculate yards gained and update game state
     const yardsGained = calculateYardsGained(result);
-    updateGameState(yardsGained, result.outcome);
+    const timeElapsed = result.timeElapsed || 15; // Default to 15 seconds if not provided
+    updateGameState(yardsGained, result.outcome, timeElapsed);
     updateHUD();
     
     // Save to IndexedDB with game state and yards gained
@@ -778,6 +851,60 @@ btnCloseHistory.onclick = () => {
   historyModal.classList.remove('active');
 };
 
+// Copy history JSON button
+btnCopyHistoryJson.onclick = async () => {
+  const entries = await gameHistoryService.getAllEntries();
+  const historyData = {
+    exportDate: new Date().toISOString(),
+    totalPlays: entries.length,
+    currentGameState: gameState,
+    playHistory: playHistory,
+    savedEntries: entries
+  };
+  
+  const jsonString = JSON.stringify(historyData, null, 2);
+  
+  // Try clipboard API first
+  try {
+    await navigator.clipboard.writeText(jsonString);
+    const originalText = btnCopyHistoryJson.textContent;
+    btnCopyHistoryJson.textContent = '✓ Copied!';
+    btnCopyHistoryJson.style.background = '#2a8a2a';
+    setTimeout(() => {
+      btnCopyHistoryJson.textContent = originalText;
+      btnCopyHistoryJson.style.background = '#3a5a7a';
+    }, 2000);
+  } catch (err) {
+    // Fallback: Show JSON in a modal for manual copy (works on iPad/mobile)
+    console.log('Clipboard API failed, showing modal fallback:', err);
+    jsonDisplayTextarea.value = jsonString;
+    jsonDisplayModal.classList.add('active');
+  }
+};
+
+// JSON modal controls
+btnSelectAllJson.onclick = () => {
+  jsonDisplayTextarea.select();
+  jsonDisplayTextarea.setSelectionRange(0, jsonDisplayTextarea.value.length);
+  // Try to copy after selection
+  try {
+    document.execCommand('copy');
+    btnSelectAllJson.textContent = '✓ Selected & Copied!';
+    setTimeout(() => {
+      btnSelectAllJson.textContent = 'Select All';
+    }, 2000);
+  } catch (err) {
+    btnSelectAllJson.textContent = '✓ Selected!';
+    setTimeout(() => {
+      btnSelectAllJson.textContent = 'Select All';
+    }, 2000);
+  }
+};
+
+btnCloseJsonModal.onclick = () => {
+  jsonDisplayModal.classList.remove('active');
+};
+
 // Clear history button
 btnClearHistory.onclick = async () => {
   if (confirm('Are you sure you want to clear all play history?')) {
@@ -920,7 +1047,8 @@ async function replayAllHistory() {
       
       // Update game state based on this play
       const yardsGained = calculateYardsGainedFromEntry(entry);
-      updateGameStateFromReplay(yardsGained, entry.result.outcome);
+      const timeElapsed = entry.result.timeElapsed || 15;
+      updateGameStateFromReplay(yardsGained, entry.result.outcome, timeElapsed);
       updateHUD();
       
       // Pause between plays (unless it's the last one)
@@ -948,7 +1076,32 @@ async function replayAllHistory() {
 }
 
 // Update game state during replay (similar to updateGameState but without saving)
-function updateGameStateFromReplay(yardsGained: number, outcome: string) {
+function updateGameStateFromReplay(yardsGained: number, outcome: string, timeElapsed: number = 15) {
+  // Deduct time from the clock
+  gameState.timeRemaining -= timeElapsed;
+  
+  // Handle quarter transitions
+  if (gameState.timeRemaining <= 0) {
+    if (gameState.quarter < 4) {
+      // Move to next quarter
+      gameState.quarter++;
+      gameState.timeRemaining = 300; // Reset to 5 minutes
+      
+      // Switch possession at halftime (after Q2)
+      if (gameState.quarter === 3) {
+        // Halftime - other team gets the ball
+        gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
+        gameState.ballPosition = 25;
+        gameState.down = 1;
+        gameState.yardsToGo = 10;
+      }
+    } else {
+      // Game over
+      gameState.quarter = 5;
+      gameState.timeRemaining = 0;
+    }
+  }
+  
   if (outcome === 'touchdown') {
     if (gameState.possession === 'home') {
       gameState.homeScore += 7;
@@ -1038,11 +1191,14 @@ function resetGameState() {
     homeScore: 0,
     awayScore: 0,
     possession: 'home',
-    quarter: 1
+    quarter: 1,
+    timeRemaining: 300 // 5 minutes per quarter
   };
   playHistory = [];
   history = [];
   summaryCrawl.style.display = 'none';
+  btnNewPlay.disabled = false;
+  btnNewPlay.textContent = 'New Play';
   updateHUD();
   // Reset field orientation (home starts on offense)
   game.setFieldOrientation(true);
@@ -1082,6 +1238,30 @@ async function restoreGameFromHistory() {
   for (const entry of entries) {
     const yardsGained = calculateYardsGainedFromEntry(entry);
     const outcome = entry.result.outcome;
+    const timeElapsed = entry.result.timeElapsed || 15;
+    
+    // Update game clock
+    gameState.timeRemaining -= timeElapsed;
+    
+    // Handle quarter transitions
+    if (gameState.timeRemaining <= 0) {
+      if (gameState.quarter < 4) {
+        gameState.quarter++;
+        gameState.timeRemaining = 300;
+        if (gameState.quarter === 3) {
+          // Halftime - switch possession
+          gameState.possession = gameState.possession === 'home' ? 'away' : 'home';
+          gameState.ballPosition = 25;
+          gameState.down = 1;
+          gameState.yardsToGo = 10;
+          continue; // Skip to next play
+        }
+      } else {
+        gameState.quarter = 5;
+        gameState.timeRemaining = 0;
+        break; // Game over
+      }
+    }
     
     // Simulate game state changes based on outcome
     if (outcome === 'touchdown') {

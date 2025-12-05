@@ -9,7 +9,7 @@ import {
   type PreTrainedTokenizer
 } from "@huggingface/transformers";
 
-const DEFAULT_MODEL = "amazon/nova-2-lite-v1";
+const DEFAULT_MODEL = "google/gemini-2.5-flash";
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 const GRANITE_MODEL_ID = "onnx-community/granite-4.0-1b-ONNX-web";
 
@@ -30,6 +30,10 @@ const COMPRESSED_SIMULATION_SCHEMA = {
     yardsGained: {
       type: "number",
       description: "Yards gained (positive) or lost (negative) on the play"
+    },
+    timeElapsed: {
+      type: "number",
+      description: "Estimated seconds that elapsed during this play (typically 5-40 seconds)"
     },
     summary: { 
       type: "string",
@@ -71,7 +75,7 @@ const COMPRESSED_SIMULATION_SCHEMA = {
       }
     }
   },
-  required: ["outcome", "yardsGained", "summary", "keyframes"],
+  required: ["outcome", "yardsGained", "timeElapsed", "summary", "keyframes"],
   additionalProperties: false
 };
 
@@ -285,6 +289,7 @@ Generate a JSON response with this exact structure:
 {
   "outcome": "touchdown|tackle|incomplete|interception|turnover",
   "yardsGained": <number>,
+  "timeElapsed": <seconds elapsed during play, typically 5-40>,
   "summary": "<brief play description>",
   "keyframes": [
     {"t": 0, "b": [0,0,0], "p": [["off_1",x,z,0,"idle"], ...], "e": ["snap"]},
@@ -383,6 +388,7 @@ Output ONLY valid JSON, no other text:`;
       const result: SimulationResult = {
         outcome: compressed.outcome,
         summary: compressed.summary,
+        timeElapsed: compressed.timeElapsed || 15, // Default to 15 seconds if not provided
         frames
       };
 
@@ -412,6 +418,7 @@ Output ONLY valid JSON, no other text:`;
     return {
       outcome,
       yardsGained,
+      timeElapsed: Math.floor(Math.random() * 20) + 10, // Random 10-30 seconds
       summary: `${offensePlay.name} vs ${defensePlay.name}: ${outcome}`,
       keyframes: [
         { t: 0, b: [0, 0, 0], p: this.generateBasicPlayerPositions(0), e: ["snap"] },
@@ -453,6 +460,8 @@ Output ONLY valid JSON, no other text:`;
     const systemPrompt = `You are a football simulation engine. Generate COMPRESSED keyframes for a play.
 
 CRITICAL: Output ONLY 6-10 keyframes total (at ticks 0, 5, 10, 15, 20, 25, etc). These will be interpolated to smooth animation.
+
+TIME ESTIMATION: Estimate how many seconds elapsed during this play (5-40 seconds typical). Include this in your response as "timeElapsed" field.
 
 Field coordinates:
 - LOS (line of scrimmage) at z=0
@@ -588,6 +597,7 @@ Generate 6-10 keyframes showing the play from snap to whistle. START with format
       const result: SimulationResult = {
         outcome: compressed.outcome,
         summary: compressed.summary,
+        timeElapsed: compressed.timeElapsed || 15, // Default to 15 seconds if not provided
         frames
       };
       

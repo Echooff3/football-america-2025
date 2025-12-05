@@ -35,6 +35,7 @@ export interface SimulationFrame {
 export interface SimulationResult {
   outcome: "touchdown" | "tackle" | "incomplete" | "interception" | "turnover";
   summary: string;
+  timeElapsed?: number; // seconds elapsed during the play (defaults to 15 if not provided)
   frames: SimulationFrame[];
 }
 
@@ -129,5 +130,6 @@ export interface GameState {
   awayScore: number;
   possession: 'home' | 'away';
   quarter: number;
+  timeRemaining: number; // seconds remaining in current quarter (300 = 5 minutes)
 }
 

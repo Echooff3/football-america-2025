@@ -89,7 +89,7 @@ export class Game {
     // Ground (Field)
     const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 53.3, height: 100 }, scene);
     const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
-    this.fieldTexture = new BABYLON.Texture("/src/assets/field.jpg", scene);
+    this.fieldTexture = new BABYLON.Texture("/field.jpg", scene);
     this.fieldTexture.wAng = Math.PI / 2; // Rotate 90 degrees (default: home on offense)
     groundMat.diffuseTexture = this.fieldTexture;
     ground.material = groundMat;
@@ -455,7 +455,7 @@ export class Game {
         const interpolatedState: PlayerState = {
           id: id,
           x: BABYLON.Scalar.Lerp(stateA.x, stateB.x, t),
-          z: BABYLON.Scalar.Lerp(stateA.z, stateB.z, t),
+          z: BABYLON.Scalar.Lerp(stateA.z, stateB.z, t) + this.lineOfScrimmageZ,
           rotation: BABYLON.Scalar.Lerp(stateA.rotation, stateB.rotation, t),
           animation: stateA.animation // No interpolation for enum, take previous
         };
@@ -471,7 +471,7 @@ export class Game {
       {
         x: BABYLON.Scalar.Lerp(ballA.x, ballB.x, t),
         y: BABYLON.Scalar.Lerp(ballA.y, ballB.y, t),
-        z: BABYLON.Scalar.Lerp(ballA.z, ballB.z, t)
+        z: BABYLON.Scalar.Lerp(ballA.z, ballB.z, t) + this.lineOfScrimmageZ
       },
       {
         x: 0, y: 0, z: 0 // Rotation interpolation omitted for brevity

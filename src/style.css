@@ -97,7 +97,7 @@ display: flex;
   background: #2a4a2a;
 }
 
-#settings-modal, #history-modal {
+#settings-modal, #history-modal, #json-display-modal {
   position: absolute;
   top: 50%;
   left: 50%;
@@ -113,7 +113,13 @@ display: flex;
   max-width: 600px;
 }
 
-#settings-modal.active, #history-modal.active {
+#json-display-modal {
+  max-width: 700px;
+  max-height: 80vh;
+  overflow: auto;
+}
+
+#settings-modal.active, #history-modal.active, #json-display-modal.active {
   display: block;
 }
 
