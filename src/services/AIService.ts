@@ -1,5 +1,7 @@
 import { SimulationSchema, type SimulationResult, type Play, type Playbook } from '../data/types';
 import { expandKeyframes, type CompressedSimulation } from '../utils/interpolation';
+import { ultraCompactToKeyframes, type UltraCompactResponse } from '../utils/ultraCompactAdapter';
+import { ULTRA_COMPACT_SCHEMA } from '../utils/compactSchema';
 import playbookData from '../data/playbook.json';
 import {
   AutoModelForCausalLM,
@@ -83,6 +85,7 @@ export class AIService {
   private apiKey: string | null = null;
   private model: string = DEFAULT_MODEL;
   private provider: AIProvider = 'openrouter';
+  private useUltraCompact: boolean = false; // New: Enable ultra-compact waypoint encoding
   
   // Granite model state
   private graniteModel: PreTrainedModel | null = null;
@@ -103,6 +106,7 @@ export class AIService {
     this.apiKey = localStorage.getItem('openrouter_api_key');
     this.model = localStorage.getItem('openrouter_model') || DEFAULT_MODEL;
     this.provider = (localStorage.getItem('ai_provider') as AIProvider) || 'openrouter';
+    this.useUltraCompact = localStorage.getItem('use_ultra_compact') === 'true';
   }
 
   public saveSettings(apiKey: string, model: string, provider: AIProvider) {
@@ -114,11 +118,18 @@ export class AIService {
     localStorage.setItem('ai_provider', provider);
   }
 
+  public setUltraCompactMode(enabled: boolean) {
+    this.useUltraCompact = enabled;
+    localStorage.setItem('use_ultra_compact', enabled.toString());
+    console.log(`[AIService] Ultra-compact mode ${enabled ? 'enabled' : 'disabled'}`);
+  }
+
   public getSettings() {
     return {
       apiKey: this.apiKey,
       model: this.model,
       provider: this.provider,
+      useUltraCompact: this.useUltraCompact,
       isGraniteLoaded: this.graniteModel !== null && this.graniteTokenizer !== null,
       isGraniteLoading: this.isGraniteLoading,
       graniteLoadProgress: this.graniteLoadProgress
@@ -242,7 +253,12 @@ export class AIService {
       if (this.provider === 'granite') {
         result = await this.simulatePlayWithGranite(offensePlay, defensePlay, history);
       } else {
-        result = await this.simulatePlayWithOpenRouter(offensePlay, defensePlay, history);
+        // Use ultra-compact format if enabled for OpenRouter
+        if (this.useUltraCompact) {
+          result = await this.simulatePlayUltraCompact(offensePlay, defensePlay, history);
+        } else {
+          result = await this.simulatePlayWithOpenRouter(offensePlay, defensePlay, history);
+        }
       }
       this.lastRequestDurationMs = performance.now() - startTime;
       this.onRequestComplete?.(this.lastRequestDurationMs);
@@ -608,6 +624,171 @@ Generate 6-10 keyframes showing the play from snap to whistle. START with format
 
     } catch (error) {
       console.error("Simulation failed:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Simulate play using ULTRA-COMPACT waypoint format (60-70% token reduction)
+   * Uses waypoint-based encoding: 2-3 waypoints per player instead of 6-10 keyframes
+   */
+  private async simulatePlayUltraCompact(offensePlay: Play, defensePlay: Play, _history: string[]): Promise<SimulationResult> {
+    if (!this.apiKey) {
+      throw new Error("OpenRouter API Key is missing. Please set it in Settings.");
+    }
+
+    // Calculate chance modifiers based on play matchup
+    const chanceContext = this.calculateChanceModifiers(offensePlay, defensePlay);
+    
+    // Get formation starting positions
+    const offenseFormation = this.getFormationPositions(offensePlay.formation, 'offense');
+    const defenseFormation = this.getFormationPositions(defensePlay.formation, 'defense');
+
+    const systemPrompt = `You are a football simulation engine using ULTRA-COMPACT waypoint encoding.
+
+OUTPUT FORMAT: Use waypoint-based paths instead of tick-by-tick keyframes.
+- Generate 2-3 waypoints per player (start → middle (optional) → end)
+- System automatically interpolates smooth movement between waypoints
+- This reduces output tokens by 60-70% vs keyframe format
+
+Field coordinates:
+- LOS (line of scrimmage) at z=0
+- Offense starts at negative z (behind LOS)
+- Defense starts at positive z (ahead of LOS)  
+- Ball starts at {x: 0, y: 0, z: 0}
+- Positive z = downfield toward defense's endzone
+- x: -26.5 to 26.5 (sidelines)
+
+STARTING FORMATIONS (use these as waypoint 1):
+${offenseFormation}
+${defenseFormation}
+
+CHANCE FACTORS FOR THIS PLAY:
+${chanceContext}
+
+PLAYER MOVEMENT RULES:
+1. Generate 2-3 waypoints per player showing their path
+2. Most players need only 2 waypoints (start, end)
+3. Ball carrier/receivers may need 3 waypoints (start, middle action, end)
+4. Rotation: face direction of movement (0=forward, PI=back, PI/2=right)
+5. Animations: idle, sprint, backpedal, throw, catch, tackle, fall, block
+
+Player IDs: off_1 to off_11, def_1 to def_11
+
+EXAMPLE (QB pass to WR):
+{
+  "outcome": "tackle",
+  "yardsGained": 12,
+  "timeElapsed": 6.5,
+  "summary": "QB passes to WR for 12 yards",
+  "ballPath": [[0,1,-5], [0,5,5], [10,1,12]],
+  "playerPaths": [
+    {"id": "off_1", "waypoints": [
+      {"x": 0, "z": -5, "rotation": 0, "animation": "idle"},
+      {"x": 0, "z": -4, "rotation": 0, "animation": "throw"}
+    ]},
+    {"id": "off_10", "waypoints": [
+      {"x": -15, "z": 0, "rotation": 0, "animation": "sprint"},
+      {"x": -10, "z": 8, "rotation": 0, "animation": "catch"},
+      {"x": 10, "z": 12, "rotation": 1.57, "animation": "fall"}
+    ]}
+  ],
+  "events": ["snap", "throw", "catch", "tackle"]
+}`;
+
+    const userPrompt = `Offense: ${offensePlay.name} - ${offensePlay.description}
+Defense: ${defensePlay.name} - ${defensePlay.description}
+
+Generate waypoint paths showing player movement from snap to whistle. Use 2-3 waypoints per player.`;
+
+    try {
+      const response = await fetch(OPENROUTER_API_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${this.apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": window.location.origin,
+          "X-Title": "Football America 2025",
+        },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: 6000, // Reduced further - waypoint format is much more compact
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "ultra_compact_simulation",
+              strict: true,
+              schema: ULTRA_COMPACT_SCHEMA
+            }
+          }
+        })
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenRouter API Error: ${response.status} - ${errorText}`);
+      }
+
+      const data = await response.json();
+      
+      // Check if the response was completed
+      const finishReason = data.choices?.[0]?.finish_reason;
+      if (!finishReason || finishReason === 'length') {
+        console.error("API response was truncated:", data);
+        throw new Error("AI response was truncated (incomplete). Try a different model.");
+      }
+      
+      const content = data.choices[0].message.content;
+      
+      if (!content || content.trim() === '') {
+        throw new Error("AI returned an empty response. Please try again.");
+      }
+      
+      // Strip markdown code fences if present
+      let jsonContent = content.trim();
+      jsonContent = this.stripMarkdownCodeFences(jsonContent);
+      jsonContent = this.stripJsonComments(jsonContent);
+      
+      // Parse the ultra-compact format
+      let ultraCompact: UltraCompactResponse;
+      try {
+        ultraCompact = JSON.parse(jsonContent);
+      } catch (parseError) {
+        console.error("Failed to parse AI response as JSON:", jsonContent);
+        throw new Error(`AI returned invalid JSON. Error: ${parseError instanceof Error ? parseError.message : 'Unknown'}`);
+      }
+      
+      console.log(`[Ultra-Compact] Received ${ultraCompact.playerPaths.length} player paths with avg ${Math.round(ultraCompact.playerPaths.reduce((sum, p) => sum + p.waypoints.length, 0) / ultraCompact.playerPaths.length)} waypoints each`);
+      
+      // Convert ultra-compact waypoints to compressed keyframes
+      const compressed = ultraCompactToKeyframes(ultraCompact);
+      
+      console.log(`[Ultra-Compact] Generated ${compressed.keyframes.length} keyframes from waypoints`);
+      
+      // Expand keyframes to full frames using interpolation
+      const frames = expandKeyframes(compressed, 10, 'linear');
+      
+      console.log(`[Ultra-Compact] Expanded to ${frames.length} interpolated frames`);
+      
+      // Build the full result
+      const result: SimulationResult = {
+        outcome: compressed.outcome as SimulationResult['outcome'],
+        summary: compressed.summary,
+        timeElapsed: compressed.timeElapsed || 15,
+        frames
+      };
+      
+      // Validate with Zod
+      const parsed = SimulationSchema.parse(result);
+      
+      return parsed as SimulationResult;
+
+    } catch (error) {
+      console.error("[Ultra-Compact] Simulation failed:", error);
       throw error;
     }
   }

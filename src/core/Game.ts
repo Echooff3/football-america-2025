@@ -87,7 +87,10 @@ export class Game {
     light.intensity = 0.7;
 
     // Ground (Field)
-    const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 53.3, height: 100 }, scene);
+    // Field dimensions: 120 yards total (100 yard field + 2x10 yard endzones)
+    // Width: 53.3 yards (53 1/3 yards)
+    // Texture: endzones are 141px each, 10-yard markers are 96px apart
+    const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 53.3, height: 120 }, scene);
     const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
     this.fieldTexture = new BABYLON.Texture("/field.jpg", scene);
     this.fieldTexture.wAng = Math.PI / 2; // Rotate 90 degrees (default: home on offense)

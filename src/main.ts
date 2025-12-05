@@ -49,6 +49,7 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
         <div id="summary-crawl" style="display: none; text-align: center; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #444;">
           <span id="summary-outcome" style="font-weight: bold; text-transform: uppercase; margin-right: 8px;"></span>
           <span id="summary-text" style="font-size: 0.9em; color: #ccc;"></span>
+          <span id="summary-yards" style="font-weight: bold; margin-left: 8px;"></span>
         </div>
         <div id="normal-controls">
           <div style="display: flex; gap: 10px; align-items: center;">
@@ -113,6 +114,18 @@ document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
           <option value="anthropic/claude-3.5-sonnet">Claude 3.5 Sonnet</option>
           <option value="x-ai/grok-4.1-fast">Grok 4.1 Fast</option>
         </datalist>
+        
+        <div style="background: #1a2a1a; padding: 12px; border-radius: 6px; margin-top: 15px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0;">
+            <input type="checkbox" id="ultra-compact-toggle" style="width: auto;">
+            <div>
+              <span style="font-weight: bold; color: #6a6;">Ultra-Compact Mode</span>
+              <p style="margin: 5px 0 0 0; font-size: 0.85em; color: #aaa;">
+                Uses waypoint encoding (60-70% fewer tokens). Recommended for models with small context windows.
+              </p>
+            </div>
+          </label>
+        </div>
       </div>
 
       <div id="granite-settings" style="display: none;">
@@ -264,6 +277,7 @@ const requestTimeDisplay = document.getElementById('request-time')!;
 const summaryCrawl = document.getElementById('summary-crawl')!;
 const summaryOutcome = document.getElementById('summary-outcome')!;
 const summaryText = document.getElementById('summary-text')!;
+const summaryYards = document.getElementById('summary-yards')!;
 const splashScreen = document.getElementById('splash-screen')!;
 const btnCloseSplash = document.getElementById('btn-close-splash')!;
 
@@ -278,6 +292,7 @@ const graniteStatusText = document.getElementById('granite-status-text')!;
 const graniteProgress = document.getElementById('granite-progress')!;
 const graniteProgressBar = document.getElementById('granite-progress-bar')!;
 const graniteProgressText = document.getElementById('granite-progress-text')!;
+const ultraCompactToggle = document.getElementById('ultra-compact-toggle') as HTMLInputElement;
 
 // Helper function to format down
 function formatDown(down: number): string {
@@ -322,7 +337,7 @@ function updateHUD() {
 }
 
 // Update summary crawl display
-function updateSummaryCrawl(outcome: string, summary: string) {
+function updateSummaryCrawl(outcome: string, summary: string, yardsGained?: number) {
   summaryCrawl.style.display = 'block';
   summaryOutcome.textContent = outcome;
   
@@ -337,6 +352,22 @@ function updateSummaryCrawl(outcome: string, summary: string) {
   summaryOutcome.style.color = outcomeColors[outcome.toLowerCase()] || '#fff';
   
   summaryText.textContent = summary;
+  
+  // Display yards gained/lost with color coding
+  if (yardsGained !== undefined) {
+    const yardsText = yardsGained > 0 ? `+${yardsGained} yds` : yardsGained < 0 ? `${yardsGained} yds` : '0 yds';
+    summaryYards.textContent = yardsText;
+    // Color: green for positive, red for negative, yellow for no change
+    if (yardsGained > 0) {
+      summaryYards.style.color = '#4a4'; // green
+    } else if (yardsGained < 0) {
+      summaryYards.style.color = '#a44'; // red
+    } else {
+      summaryYards.style.color = '#aa4'; // yellow
+    }
+  } else {
+    summaryYards.textContent = '';
+  }
 }
 
 // Calculate yards gained from simulation result
@@ -618,7 +649,7 @@ btnConfirmPlay.onclick = async () => {
     game.loadSimulation(result);
     
     // Update summary crawl for QA
-    updateSummaryCrawl(result.outcome, result.summary);
+    updateSummaryCrawl(result.outcome, result.summary, yardsGained);
     
     // Update Timeline UI
     timeline.max = (result.frames[result.frames.length - 1].tick / 10).toString();
@@ -641,6 +672,7 @@ btnSettings.onclick = () => {
   const settings = aiService.getSettings();
   apiKeyInput.value = settings.apiKey || '';
   modelInput.value = settings.model;
+  ultraCompactToggle.checked = settings.useUltraCompact;
   
   // Set provider radio
   if (settings.provider === 'granite') {
@@ -720,6 +752,7 @@ btnLoadGranite.onclick = async () => {
 btnSaveSettings.onclick = () => {
   const provider: AIProvider = providerGranite.checked ? 'granite' : 'openrouter';
   aiService.saveSettings(apiKeyInput.value, modelInput.value, provider);
+  aiService.setUltraCompactMode(ultraCompactToggle.checked);
   settingsModal.classList.remove('active');
 };
 
@@ -1036,7 +1069,8 @@ async function replayAllHistory() {
       
       // Load and play the simulation
       game.loadSimulation(entry.result);
-      updateSummaryCrawl(entry.result.outcome, entry.result.summary);
+      const yardsGained = calculateYardsGainedFromEntry(entry);
+      updateSummaryCrawl(entry.result.outcome, entry.result.summary, yardsGained);
       timeline.max = (entry.result.frames[entry.result.frames.length - 1].tick / 10).toString();
       game.play();
       
@@ -1046,7 +1080,6 @@ async function replayAllHistory() {
       if (signal.aborted) break;
       
       // Update game state based on this play
-      const yardsGained = calculateYardsGainedFromEntry(entry);
       const timeElapsed = entry.result.timeElapsed || 15;
       updateGameStateFromReplay(yardsGained, entry.result.outcome, timeElapsed);
       updateHUD();
@@ -1170,7 +1203,8 @@ function loadHistoryEntry(entry: GameHistoryEntry) {
   }
   
   game.loadSimulation(entry.result);
-  updateSummaryCrawl(entry.result.outcome, entry.result.summary);
+  const yardsGained = calculateYardsGainedFromEntry(entry);
+  updateSummaryCrawl(entry.result.outcome, entry.result.summary, yardsGained);
   timeline.max = (entry.result.frames[entry.result.frames.length - 1].tick / 10).toString();
   game.play();
 }
@@ -1330,7 +1364,8 @@ async function restoreGameFromHistory() {
   timeline.max = (lastEntry.result.frames[lastEntry.result.frames.length - 1].tick / 10).toString();
   
   // Show the last play's summary
-  updateSummaryCrawl(lastEntry.result.outcome, lastEntry.result.summary);
+  const lastYardsGained = calculateYardsGainedFromEntry(lastEntry);
+  updateSummaryCrawl(lastEntry.result.outcome, lastEntry.result.summary, lastYardsGained);
   
   console.log(`[Game] Restored: ${gameState.homeScore}-${gameState.awayScore}, ${formatDown(gameState.down)} & ${gameState.yardsToGo} at ${formatYardLine(gameState.ballPosition)}, ${gameState.possession.toUpperCase()} ball`);
 }
