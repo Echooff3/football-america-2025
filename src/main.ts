@@ -535,9 +535,6 @@ function renderPlays() {
 }
 
 function selectPlay(play: Play, side: 'offense' | 'defense', element: HTMLElement) {
-  // Home team is on offense when they have possession
-  const homeIsOnOffense = gameState.possession === 'home';
-  
   if (side === 'offense') {
     selectedOffensePlay = play;
     // Visual selection logic
