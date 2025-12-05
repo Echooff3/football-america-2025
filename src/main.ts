@@ -337,7 +337,7 @@ function updateHUD() {
 }
 
 // Update summary crawl display
-function updateSummaryCrawl(outcome: string, summary: string, yardsGained?: number) {
+function updateSummaryCrawl(outcome: string, summary: string, yardsGained?: number, humanPlay?: string, cpuPlay?: string) {
   summaryCrawl.style.display = 'block';
   summaryOutcome.textContent = outcome;
   
@@ -351,7 +351,12 @@ function updateSummaryCrawl(outcome: string, summary: string, yardsGained?: numb
   };
   summaryOutcome.style.color = outcomeColors[outcome.toLowerCase()] || '#fff';
   
-  summaryText.textContent = summary;
+  // Build summary text with plays info
+  let fullSummary = summary;
+  if (humanPlay && cpuPlay) {
+    fullSummary = `YOUR PLAY: ${humanPlay} | CPU PLAY: ${cpuPlay} — ${summary}`;
+  }
+  summaryText.textContent = fullSummary;
   
   // Display yards gained/lost with color coding
   if (yardsGained !== undefined) {
@@ -539,46 +544,30 @@ function selectPlay(play: Play, side: 'offense' | 'defense', element: HTMLElemen
     Array.from(offenseGrid.children).forEach(c => c.classList.remove('selected'));
     element.classList.add('selected');
     
-    // Check if both plays are now selected
-    if (selectedDefensePlay) {
-      // Both plays selected, enable confirm
-      btnConfirmPlay.disabled = false;
-    } else {
-      // After picking offense, switch to defense selection
-      offenseGrid.style.display = 'none';
-      defenseGrid.style.display = 'grid';
-      
-      if (homeIsOnOffense) {
-        // Home picked their offense, now pick opponent's defense (CPU)
-        document.querySelector('#play-selection h2')!.textContent = "Choose Defense (CPU)";
-      } else {
-        // Home is on defense, this was CPU's offense pick, now home picks their defense
-        document.querySelector('#play-selection h2')!.textContent = "Choose Defense";
-      }
-    }
+    // CPU automatically selects a random defense play
+    selectedDefensePlay = getRandomPlay('defense');
+    console.log(`🤖 CPU selected defense: ${selectedDefensePlay.name}`);
+    
+    // Both plays now selected, enable confirm
+    btnConfirmPlay.disabled = false;
   } else {
     selectedDefensePlay = play;
     Array.from(defenseGrid.children).forEach(c => c.classList.remove('selected'));
     element.classList.add('selected');
     
-    // Check if both plays are now selected
-    if (selectedOffensePlay) {
-      // Both plays selected, enable confirm
-      btnConfirmPlay.disabled = false;
-    } else {
-      // After picking defense, switch to offense selection
-      defenseGrid.style.display = 'none';
-      offenseGrid.style.display = 'grid';
-      
-      if (homeIsOnOffense) {
-        // Home is on offense, this was CPU's defense pick - shouldn't happen in normal flow
-        document.querySelector('#play-selection h2')!.textContent = "Choose Offense";
-      } else {
-        // Home picked their defense, now pick CPU's offense
-        document.querySelector('#play-selection h2')!.textContent = "Choose Offense (CPU)";
-      }
-    }
+    // CPU automatically selects a random offense play
+    selectedOffensePlay = getRandomPlay('offense');
+    console.log(`🤖 CPU selected offense: ${selectedOffensePlay.name}`);
+    
+    // Both plays now selected, enable confirm
+    btnConfirmPlay.disabled = false;
   }
+}
+
+// Helper function to get a random play from a list
+function getRandomPlay(side: 'offense' | 'defense'): Play {
+  const plays = playbook.plays.filter(p => p.side === side);
+  return plays[Math.floor(Math.random() * plays.length)];
 }
 
 // Event Listeners
@@ -588,20 +577,20 @@ btnNewPlay.onclick = () => {
   selectedDefensePlay = null;
   btnConfirmPlay.disabled = true;
   
-  // Check possession to determine which plays to show first
-  // Home team picks their side first, then picks for CPU opponent
+  // Check possession to determine which plays to show
+  // Home team picks their own play, CPU picks randomly
   const homeIsOnOffense = gameState.possession === 'home';
   
   if (homeIsOnOffense) {
-    // Home is on offense - show offense plays for user to pick first
+    // Home is on offense - show offense plays for user to pick
     offenseGrid.style.display = 'grid';
     defenseGrid.style.display = 'none';
-    document.querySelector('#play-selection h2')!.textContent = "Choose Offense";
+    document.querySelector('#play-selection h2')!.textContent = "Choose Your Offense";
   } else {
-    // Home is on defense - show defense plays for user to pick first
+    // Home is on defense - show defense plays for user to pick
     offenseGrid.style.display = 'none';
     defenseGrid.style.display = 'grid';
-    document.querySelector('#play-selection h2')!.textContent = "Choose Defense";
+    document.querySelector('#play-selection h2')!.textContent = "Choose Your Defense";
   }
   
   // Reset selection visuals
@@ -672,8 +661,11 @@ btnConfirmPlay.onclick = async () => {
 
     game.loadSimulation(result);
     
-    // Update summary crawl for QA
-    updateSummaryCrawl(result.outcome, result.summary, yardsGained);
+    // Update summary crawl for QA - show human play vs CPU play
+    // Use homeOnOffense captured before updateGameState (possession may have changed after TD/turnover)
+    const humanPlay = homeOnOffense ? selectedOffensePlay.name : selectedDefensePlay.name;
+    const cpuPlay = homeOnOffense ? selectedDefensePlay.name : selectedOffensePlay.name;
+    updateSummaryCrawl(result.outcome, result.summary, yardsGained, humanPlay, cpuPlay);
     
     // Update Timeline UI
     timeline.max = (result.frames[result.frames.length - 1].tick / 10).toString();
@@ -1094,7 +1086,11 @@ async function replayAllHistory() {
       // Load and play the simulation
       game.loadSimulation(entry.result);
       const yardsGained = calculateYardsGainedFromEntry(entry);
-      updateSummaryCrawl(entry.result.outcome, entry.result.summary, yardsGained);
+      // Determine human vs CPU plays based on possession at time of play
+      const entryHomeOnOffense = entry.gameState?.possession === 'home' || true;
+      const humanPlay = entryHomeOnOffense ? entry.offensePlay.name : entry.defensePlay.name;
+      const cpuPlay = entryHomeOnOffense ? entry.defensePlay.name : entry.offensePlay.name;
+      updateSummaryCrawl(entry.result.outcome, entry.result.summary, yardsGained, humanPlay, cpuPlay);
       timeline.max = (entry.result.frames[entry.result.frames.length - 1].tick / 10).toString();
       game.play();
       
@@ -1228,7 +1224,11 @@ function loadHistoryEntry(entry: GameHistoryEntry) {
   
   game.loadSimulation(entry.result);
   const yardsGained = calculateYardsGainedFromEntry(entry);
-  updateSummaryCrawl(entry.result.outcome, entry.result.summary, yardsGained);
+  // Determine human vs CPU plays based on possession at time of play
+  const entryHomeOnOffense = entry.gameState?.possession === 'home' || true;
+  const humanPlay = entryHomeOnOffense ? entry.offensePlay.name : entry.defensePlay.name;
+  const cpuPlay = entryHomeOnOffense ? entry.defensePlay.name : entry.offensePlay.name;
+  updateSummaryCrawl(entry.result.outcome, entry.result.summary, yardsGained, humanPlay, cpuPlay);
   timeline.max = (entry.result.frames[entry.result.frames.length - 1].tick / 10).toString();
   game.play();
 }
@@ -1389,7 +1389,10 @@ async function restoreGameFromHistory() {
   
   // Show the last play's summary
   const lastYardsGained = calculateYardsGainedFromEntry(lastEntry);
-  updateSummaryCrawl(lastEntry.result.outcome, lastEntry.result.summary, lastYardsGained);
+  const lastHomeOnOffense = lastEntry.gameState?.possession === 'home' || true;
+  const lastHumanPlay = lastHomeOnOffense ? lastEntry.offensePlay.name : lastEntry.defensePlay.name;
+  const lastCpuPlay = lastHomeOnOffense ? lastEntry.defensePlay.name : lastEntry.offensePlay.name;
+  updateSummaryCrawl(lastEntry.result.outcome, lastEntry.result.summary, lastYardsGained, lastHumanPlay, lastCpuPlay);
   
   console.log(`[Game] Restored: ${gameState.homeScore}-${gameState.awayScore}, ${formatDown(gameState.down)} & ${gameState.yardsToGo} at ${formatYardLine(gameState.ballPosition)}, ${gameState.possession.toUpperCase()} ball`);
 }
