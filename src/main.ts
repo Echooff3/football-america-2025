@@ -441,16 +441,27 @@ function updateGameState(yardsGained: number, outcome: string, timeElapsed: numb
     }
   }
   
+  // Manual touchdown check (secondary safety check):
+  // If ball position + yards gained crosses the goal line and not a turnover, force touchdown
+  let effectiveOutcome = outcome;
+  if (gameState.ballPosition + yardsGained >= 100 && 
+      outcome !== 'interception' && 
+      outcome !== 'turnover' &&
+      outcome !== 'incomplete') {
+    console.log(`🎯 SAFETY CHECK: Promoting outcome from "${outcome}" to "touchdown" (ball would cross goal line)`);
+    effectiveOutcome = 'touchdown';
+  }
+  
   // Record the play in history
   playHistory.push({
     play: `${selectedOffensePlay?.name || 'Unknown'} vs ${selectedDefensePlay?.name || 'Unknown'}`,
-    result: outcome,
+    result: effectiveOutcome,
     yardsGained,
     timestamp: Date.now()
   });
 
   // Handle special outcomes
-  if (outcome === 'touchdown') {
+  if (effectiveOutcome === 'touchdown') {
     // Add 7 points (6 for TD + 1 for extra point)
     // TODO: Add QTE (Quick Time Event) for extra point attempt instead of auto-awarding
     // For now, assume extra point is always good
@@ -469,7 +480,7 @@ function updateGameState(yardsGained: number, outcome: string, timeElapsed: numb
     return;
   }
 
-  if (outcome === 'interception' || outcome === 'turnover') {
+  if (effectiveOutcome === 'interception' || effectiveOutcome === 'turnover') {
     // Turnover - other team gets the ball at current position (flipped)
     switchPossession(false); // afterKickoff = false (turnover)
     return;
@@ -478,8 +489,7 @@ function updateGameState(yardsGained: number, outcome: string, timeElapsed: numb
   // Normal play progression
   gameState.ballPosition += yardsGained;
   
-  // Keep ball position in bounds (0-100)
-  // Note: 100+ would be a touchdown, but that should be handled by AI outcome
+  // Safety bounds check (ball position should never exceed 99 after above checks)
   gameState.ballPosition = Math.max(1, Math.min(99, gameState.ballPosition));
   
   // Check for first down
@@ -633,7 +643,21 @@ btnConfirmPlay.onclick = async () => {
     // Calculate yards gained and update game state
     const yardsGained = calculateYardsGained(result);
     const timeElapsed = result.timeElapsed || 15; // Default to 15 seconds if not provided
-    updateGameState(yardsGained, result.outcome, timeElapsed);
+    
+    // Manual touchdown check: If ball position + yards gained crosses the goal line (100+)
+    // and the outcome wasn't already a turnover/interception/incomplete, it should be a touchdown
+    let effectiveOutcome = result.outcome;
+    if (gameState.ballPosition + yardsGained >= 100 && 
+        result.outcome !== 'interception' && 
+        result.outcome !== 'turnover' &&
+        result.outcome !== 'incomplete') {
+      console.log(`🎯 MANUAL TD CHECK: Ball at ${gameState.ballPosition} + ${yardsGained} yards = ${gameState.ballPosition + yardsGained} >= 100. Forcing TOUCHDOWN!`);
+      effectiveOutcome = 'touchdown';
+      // Update the result object so the animation also reflects the touchdown
+      result.outcome = 'touchdown';
+    }
+    
+    updateGameState(yardsGained, effectiveOutcome, timeElapsed);
     updateHUD();
     
     // Save to IndexedDB with game state and yards gained
