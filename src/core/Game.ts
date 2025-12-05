@@ -92,7 +92,7 @@ export class Game {
     // Texture: endzones are 141px each, 10-yard markers are 96px apart
     const ground = BABYLON.MeshBuilder.CreateGround("ground", { width: 53.3, height: 120 }, scene);
     const groundMat = new BABYLON.StandardMaterial("groundMat", scene);
-    this.fieldTexture = new BABYLON.Texture("/field.jpg", scene);
+    this.fieldTexture = new BABYLON.Texture(import.meta.env.BASE_URL + "field.jpg", scene);
     this.fieldTexture.wAng = Math.PI / 2; // Rotate 90 degrees (default: home on offense)
     groundMat.diffuseTexture = this.fieldTexture;
     ground.material = groundMat;
