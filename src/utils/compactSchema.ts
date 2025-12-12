@@ -8,7 +8,7 @@ export const ULTRA_COMPACT_SCHEMA = {
   properties: {
     outcome: {
       type: "string",
-      enum: ["touchdown", "tackle", "incomplete", "interception", "turnover"],
+      enum: ["touchdown", "tackle", "incomplete", "complete", "interception", "turnover"],
       description: "The result of the play"
     },
     yardsGained: {

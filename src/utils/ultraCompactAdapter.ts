@@ -6,7 +6,7 @@
 import type { CompressedSimulation } from './interpolation';
 
 export interface UltraCompactResponse {
-  outcome: 'touchdown' | 'tackle' | 'incomplete' | 'interception' | 'turnover';
+  outcome: 'touchdown' | 'tackle' | 'incomplete' | 'complete' | 'interception' | 'turnover';
   yardsGained: number;
   timeElapsed: number;
   summary: string;

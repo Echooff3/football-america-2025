@@ -26,7 +26,7 @@ const COMPRESSED_SIMULATION_SCHEMA = {
   properties: {
     outcome: {
       type: "string",
-      enum: ["touchdown", "tackle", "incomplete", "interception", "turnover"],
+      enum: ["touchdown", "tackle", "incomplete", "complete", "interception", "turnover"],
       description: "The result of the play"
     },
     yardsGained: {
@@ -303,7 +303,7 @@ ${chanceContext}
 
 Generate a JSON response with this exact structure:
 {
-  "outcome": "touchdown|tackle|incomplete|interception|turnover",
+  "outcome": "touchdown|tackle|incomplete|complete|interception|turnover",
   "yardsGained": <number>,
   "timeElapsed": <seconds elapsed during play, typically 5-40>,
   "summary": "<brief play description>",
@@ -424,7 +424,7 @@ Output ONLY valid JSON, no other text:`;
    * Generate a fallback simulation when Granite output is invalid
    */
   private generateFallbackSimulation(offensePlay: Play, defensePlay: Play): CompressedSimulation & { yardsGained: number } {
-    const outcomes = ["touchdown", "tackle", "incomplete", "interception"] as const;
+    const outcomes = ["touchdown", "tackle", "incomplete", "complete", "interception"] as const;
     const outcome = outcomes[Math.floor(Math.random() * outcomes.length)];
     const yardsGained = outcome === "touchdown" ? 50 : 
                         outcome === "incomplete" ? 0 : 
@@ -520,7 +520,7 @@ Animations: idle, sprint, backpedal, throw, catch, tackle, fall, block
 
 Output format (COMPACT):
 {
-  "outcome": "touchdown|tackle|incomplete|interception|turnover",
+  "outcome": "touchdown|tackle|incomplete|complete|interception|turnover",
   "yardsGained": <number>,
   "summary": "<brief play description>",
   "keyframes": [
@@ -973,7 +973,7 @@ Generate waypoint paths showing player movement from snap to whistle. Use 2-3 wa
    * Sanitize compressed simulation data - fix invalid enum values
    */
   private sanitizeCompressedSimulation(data: CompressedSimulation & { yardsGained: number }): CompressedSimulation & { yardsGained: number } {
-    const validOutcomes = ["touchdown", "tackle", "incomplete", "interception", "turnover"] as const;
+    const validOutcomes = ["touchdown", "tackle", "incomplete", "complete", "interception", "turnover"] as const;
     const validAnimations = ["idle", "sprint", "backpedal", "throw", "catch", "tackle", "fall", "block"] as const;
     
     // Fix outcome if invalid
@@ -981,8 +981,8 @@ Generate waypoint paths showing player movement from snap to whistle. Use 2-3 wa
       console.warn(`Invalid outcome "${data.outcome}", mapping to valid value...`);
       // Map common invalid outcomes to valid ones
       const outcomeLower = data.outcome.toLowerCase();
-      if (outcomeLower.includes('gain') || outcomeLower.includes('yards') || outcomeLower.includes('complete')) {
-        data.outcome = "tackle"; // A completed play that ended normally
+      if (outcomeLower.includes('gain') || outcomeLower.includes('yards')) {
+        data.outcome = "complete"; // A completed play that ended normally
       } else if (outcomeLower.includes('sack') || outcomeLower.includes('loss')) {
         data.outcome = "tackle";
       } else if (outcomeLower.includes('drop') || outcomeLower.includes('miss') || outcomeLower.includes('incomplete')) {

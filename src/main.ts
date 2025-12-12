@@ -346,6 +346,7 @@ function updateSummaryCrawl(outcome: string, summary: string, yardsGained?: numb
     'touchdown': '#4a4',
     'tackle': '#fff',
     'incomplete': '#aa4',
+    'complete': '#4a4',
     'interception': '#a44',
     'turnover': '#a44'
   };
@@ -392,6 +393,7 @@ function calculateYardsGained(result: { outcome: string; summary: string }): num
   switch (result.outcome) {
     case 'touchdown': return Math.max(100 - gameState.ballPosition, 10);
     case 'incomplete': return 0;
+    case 'complete': return Math.floor(Math.random() * 8) + 1; // 1-8 yards
     case 'interception': return 0;
     case 'turnover': return 0;
     case 'tackle': return Math.floor(Math.random() * 8) + 1; // 1-8 yards
@@ -1415,6 +1417,7 @@ function calculateYardsGainedFromEntry(entry: GameHistoryEntry): number {
   switch (entry.result.outcome) {
     case 'touchdown': return 10; // Assume minimum TD distance
     case 'incomplete': return 0;
+    case 'complete': return 3; // Assume average gain for complete
     case 'interception': return 0;
     case 'turnover': return 0;
     case 'tackle': return 3; // Assume average gain for tackle
