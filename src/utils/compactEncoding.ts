@@ -40,6 +40,7 @@ const OUTCOME_CODES: Record<string, string> = {
   'touchdown': 'T',
   'tackle': 'K',
   'incomplete': 'I',
+  'complete': 'C',
   'interception': 'X',
   'turnover': 'F'
 };
@@ -48,6 +49,7 @@ const OUTCOME_DECODE: Record<string, string> = {
   'T': 'touchdown',
   'K': 'tackle',
   'I': 'incomplete',
+  'C': 'complete',
   'X': 'interception',
   'F': 'turnover'
 };
@@ -181,7 +183,7 @@ export interface UltraCompactData {
  * Encode simulation to ultra-compact format
  */
 export function encodeUltraCompact(data: {
-  outcome: 'touchdown' | 'tackle' | 'incomplete' | 'interception' | 'turnover';
+  outcome: 'touchdown' | 'tackle' | 'incomplete' | 'complete' | 'interception' | 'turnover';
   summary: string;
   timeElapsed: number; // in seconds
   ballPath: Array<[number, number, number]>; // 2-3 waypoints

@@ -33,7 +33,7 @@ export interface SimulationFrame {
 }
 
 export interface SimulationResult {
-  outcome: "touchdown" | "tackle" | "incomplete" | "interception" | "turnover";
+  outcome: "touchdown" | "tackle" | "incomplete" | "complete" | "interception" | "turnover";
   summary: string;
   timeElapsed?: number; // seconds elapsed during the play (defaults to 15 if not provided)
   frames: SimulationFrame[];
@@ -87,7 +87,7 @@ export interface Playbook {
 
 // Zod Schema for OpenRouter validation
 export const SimulationSchema = z.object({
-  outcome: z.enum(["touchdown", "tackle", "incomplete", "interception", "turnover"]),
+  outcome: z.enum(["touchdown", "tackle", "incomplete", "complete", "interception", "turnover"]),
   summary: z.string(),
   frames: z.array(z.object({
     tick: z.number(),
