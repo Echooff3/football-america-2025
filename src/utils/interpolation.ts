@@ -14,7 +14,7 @@ export interface CompressedKeyframe {
 }
 
 export interface CompressedSimulation {
-  outcome: "touchdown" | "tackle" | "incomplete" | "interception" | "turnover";
+  outcome: "touchdown" | "tackle" | "incomplete" | "complete" | "interception" | "turnover";
   summary: string;
   timeElapsed?: number; // seconds elapsed during the play (optional, defaults to 15 if not provided)
   keyframes: CompressedKeyframe[];
